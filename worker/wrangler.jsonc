@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // One worker for yaft.cc: the home page at / and the OAuth endpoints (/callback, /token, /refresh).
+  "name": "yaft",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "routes": [{ "pattern": "yaft.cc", "custom_domain": true }],
+  "vars": {
+    // The app's own scheme, plus Expo Go through the named dev tunnel (app/scripts/tunnel.sh).
+    "ALLOWED_RETURN_URLS": "yaft://,exps://expo.yaft.cc,exp://expo.yaft.cc",
+    "GITHUB_APP_SLUG": "yaft-sync",
+    "GITHUB_CLIENT_ID": "Iv23liZdVmX6qlbzLOQL"
+  }
+  // Secret: wrangler secret put GITHUB_CLIENT_SECRET
+}
