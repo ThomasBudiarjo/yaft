@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // One worker for yaft.cc: the home page at / and the OAuth endpoints (/callback, /token, /refresh).
   "name": "yaft",
+  "account_id": "991d2edd07348de19465a4b5c06b73dc",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
