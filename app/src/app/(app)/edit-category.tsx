@@ -42,7 +42,7 @@ export default function EditCategory() {
 
   return (
     <>
-      <ScrollView keyboardShouldPersistTaps="handled"
+      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets contentContainerStyle={styles.content}>
         <Pressable onPress={() => setPicking(true)} style={({ pressed }) => [styles.preview, pressed && { opacity: 0.7 }]}>
           <CategoryIcon category={{ id: '', icon, emoji, color }} size={88} />

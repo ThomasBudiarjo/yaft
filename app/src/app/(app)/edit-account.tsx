@@ -31,7 +31,7 @@ export default function EditAccount() {
 
   return (
     <>
-      <ScrollView keyboardShouldPersistTaps="handled"
+      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets contentContainerStyle={styles.content}>
         <Card>
           <Field placeholder="Account name, e.g. BCA" value={name} onChangeText={setName} autoFocus={!existing} />
