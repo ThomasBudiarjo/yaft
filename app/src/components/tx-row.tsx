@@ -6,7 +6,9 @@ import { useData } from '@/lib/data';
 import type { Stored, Transaction } from '@/lib/model';
 import { dayLabel, type DayGroup } from '@/lib/stats';
 import { rounded, typeColor, useColors } from './theme';
-import { Card, Emoji, Money, SectionHeader, Separator } from './ui';
+import { Card, Money, SectionHeader, Separator } from './ui';
+import { CategoryIcon } from './category-icon';
+import { TRANSFER_ICON } from './icons';
 
 export function TxRow({ tx }: { tx: Stored<Transaction> }) {
   const c = useColors();
@@ -30,7 +32,7 @@ export function TxRow({ tx }: { tx: Stored<Transaction> }) {
         <Pressable>
           {({ pressed }) => (
             <View style={[styles.row, { backgroundColor: pressed ? c.fill : c.card }]}>
-              <Emoji emoji={isTransfer ? '🔁' : category?.emoji ?? '💸'} color={category?.color ?? c.secondary} />
+              <CategoryIcon category={category} svg={isTransfer ? TRANSFER_ICON : undefined} color={isTransfer ? c.tint : c.secondary} />
               <View style={styles.text}>
                 <Text numberOfLines={1} style={[styles.title, { color: c.text }]}>
                   {title}

@@ -1,26 +1,35 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { Alert, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { CategoryIcon } from '@/components/category-icon';
+import { IconPicker } from '@/components/icon-picker';
 import { Segmented } from '@/components/native';
-import { Card, ColorPills, DestructiveButton, Emoji, Field, SectionHeader, Separator } from '@/components/ui';
+import { useColors } from '@/components/theme';
+import { Card, ColorPills, DestructiveButton, Field, SectionHeader, Separator } from '@/components/ui';
 import { useData } from '@/lib/data';
-import { PALETTE, ulid, type Category } from '@/lib/model';
+import { categoryIcon, PALETTE, ulid, type Category } from '@/lib/model';
 
 export default function EditCategory() {
+  const c = useColors();
   const data = useData();
   const { path } = useLocalSearchParams<{ path?: string }>();
   const existing = data.categories.find((c) => c.path === path);
   const [name, setName] = useState(existing?.name ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '🏷️');
+  // A hand-drawn icon, or null to show `emoji`.
+  const [icon, setIcon] = useState<string | null>(existing ? (categoryIcon(existing) ?? null) : 'tag');
+  const [picking, setPicking] = useState(false);
   const [type, setType] = useState<Category['type']>(existing?.type ?? 'expense');
   const [color, setColor] = useState(existing?.color ?? PALETTE[data.categories.length % PALETTE.length]);
-  const valid = name.trim() !== '' && emoji.trim() !== '';
+  const valid = name.trim() !== '' && (icon !== null || emoji.trim() !== '');
 
   async function save() {
     const category: Category = {
       id: existing?.id ?? ulid(),
       name: name.trim(),
+      icon,
       emoji: emoji.trim(),
       color,
       type,
@@ -35,9 +44,10 @@ export default function EditCategory() {
     <>
       <ScrollView keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets contentContainerStyle={styles.content}>
-        <View style={styles.preview}>
-          <Emoji emoji={emoji || '🏷️'} color={color} size={72} />
-        </View>
+        <Pressable onPress={() => setPicking(true)} style={({ pressed }) => [styles.preview, pressed && { opacity: 0.7 }]}>
+          <CategoryIcon category={{ id: '', icon, emoji, color }} size={88} />
+          <Text style={{ color: c.tint, fontSize: 15, fontWeight: '600' }}>Change icon</Text>
+        </Pressable>
         <Segmented
           options={[
             { value: 'expense', label: 'Expense' },
@@ -49,12 +59,11 @@ export default function EditCategory() {
         <Card>
           <Field placeholder="Name" value={name} onChangeText={setName} autoFocus={!existing} />
           <Separator />
-          {/* Keep the last grapheme typed, so tapping another emoji on the keyboard replaces it. */}
-          <Field
-            placeholder="Emoji"
-            value={emoji}
-            onChangeText={(v) => setEmoji([...new Intl.Segmenter().segment(v)].pop()?.segment ?? '')}
-          />
+          <Pressable onPress={() => setPicking(true)} style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.fill }]}>
+            <Text style={{ color: c.text, fontSize: 17, flex: 1 }}>Icon</Text>
+            <CategoryIcon category={{ id: '', icon, emoji, color }} size={30} />
+            <SymbolView name="chevron.right" size={14} weight="semibold" tintColor={c.secondary} />
+          </Pressable>
         </Card>
         <SectionHeader title="Color" />
         <Card>
@@ -79,6 +88,21 @@ export default function EditCategory() {
           />
         )}
       </ScrollView>
+      <IconPicker
+        visible={picking}
+        color={color}
+        icon={icon}
+        onPickIcon={(key) => {
+          setIcon(key);
+          setPicking(false);
+        }}
+        onPickEmoji={(value) => {
+          setEmoji(value);
+          setIcon(null);
+          setPicking(false);
+        }}
+        onClose={() => setPicking(false)}
+      />
       <Stack.Screen options={{ title: existing ? 'Edit category' : 'New category' }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
@@ -89,5 +113,6 @@ export default function EditCategory() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 48 },
-  preview: { alignItems: 'center', paddingVertical: 8 },
+  preview: { alignItems: 'center', paddingVertical: 8, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10 },
 });

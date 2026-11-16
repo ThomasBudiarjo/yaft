@@ -65,22 +65,6 @@ export function Money({
   );
 }
 
-export function Emoji({ emoji, color, size = 40 }: { emoji: string; color: string; size?: number }) {
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: color + '33',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-      <Text style={{ fontSize: size * 0.5 }}>{emoji}</Text>
-    </View>
-  );
-}
-
 export interface PillItem<T> {
   value: T;
   label: string;

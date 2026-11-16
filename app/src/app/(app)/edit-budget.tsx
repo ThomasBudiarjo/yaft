@@ -3,9 +3,10 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/components/theme';
-import { Card, ColorPills, DestructiveButton, Emoji, Field, SectionHeader, Separator } from '@/components/ui';
+import { Card, ColorPills, DestructiveButton, Field, SectionHeader, Separator } from '@/components/ui';
 import { useData } from '@/lib/data';
 import { PALETTE, ulid, type Budget } from '@/lib/model';
+import { CategoryIcon } from '@/components/category-icon';
 
 export default function EditBudget() {
   const c = useColors();
@@ -52,7 +53,7 @@ export default function EditBudget() {
               <View key={cat.id}>
                 {i > 0 && <Separator />}
                 <Pressable onPress={() => toggle(cat.id)} style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.fill }]}>
-                  <Emoji emoji={cat.emoji} color={cat.color} size={32} />
+                  <CategoryIcon category={cat} size={32} />
                   <Text style={[styles.name, { color: c.text }]}>{cat.name}</Text>
                   <Text style={{ color: c.tint, fontSize: 18 }}>{categoryIds.includes(cat.id) ? '✓' : ''}</Text>
                 </Pressable>

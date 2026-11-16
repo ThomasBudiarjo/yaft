@@ -1,10 +1,14 @@
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { Easing, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { evaluate, hasOperator, OPS, press, type Op } from '@/lib/calc';
 import { rounded, useColors } from './theme';
+
+// The system keyboard's curve and timing, so the pad moves like a keyboard instead of springing.
+const KEYBOARD_CURVE = Easing.bezier(0.38, 0.7, 0.125, 1);
 
 const ROWS = [
   ['7', '8', '9', '÷'],
@@ -32,11 +36,22 @@ export function Keypad({
     onChange(press(expression, key));
   };
   const pending = hasOperator(expression);
+  // Swiping down on the pad hides it, like dismissing a keyboard. Capture so it wins over the keys.
+  // Created once; onDone only hides the pad, so the first render's callback stays correct.
+  const [swipe] = useState(() =>
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 12 && g.dy > Math.abs(g.dx),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 30) onDone();
+      },
+    }),
+  );
 
   return (
     <Animated.View
-      entering={SlideInDown.springify().damping(20)}
-      exiting={SlideOutDown.duration(180)}
+      entering={SlideInDown.duration(250).easing(KEYBOARD_CURVE)}
+      exiting={SlideOutDown.duration(200).easing(KEYBOARD_CURVE)}
+      {...swipe.panHandlers}
       style={[styles.pad, { paddingBottom: insets.bottom + 8, backgroundColor: c.card, shadowColor: '#000' }]}>
       {ROWS.map((row) => (
         <View key={row.join('')} style={styles.row}>
@@ -64,6 +79,12 @@ export function Keypad({
         </View>
       ))}
       <View style={styles.row}>
+        <Pressable
+          accessibilityLabel="Hide keypad"
+          onPress={onDone}
+          style={({ pressed }) => [styles.key, { backgroundColor: c.key }, pressed && styles.pressed]}>
+          <SymbolView name="chevron.down" size={20} weight="semibold" tintColor={c.secondary} fallback={<Text style={[styles.label, { color: c.secondary }]}>⌄</Text>} />
+        </Pressable>
         <Pressable onPress={() => tap('000')} style={({ pressed }) => [styles.key, { backgroundColor: c.key }, pressed && styles.pressed]}>
           <Text style={[styles.label, { color: c.text }]}>000</Text>
         </Pressable>
@@ -101,9 +122,10 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', gap: 8 },
   key: { flex: 1, height: 54, borderRadius: 16, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-  done: { flex: 3 },
+  done: { flex: 2 },
   pressed: { transform: [{ scale: 0.95 }], opacity: 0.8 },
   label: { fontSize: 24, fontWeight: '600', fontFamily: rounded },
 });
 
+/** Height of the pad above the bottom safe area inset. */
 export const KEYPAD_HEIGHT = 5 * 54 + 4 * 8 + 18;

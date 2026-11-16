@@ -1,9 +1,10 @@
 import { router, Stack } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/components/theme';
-import { Emoji, SectionHeader } from '@/components/ui';
+import { SectionHeader } from '@/components/ui';
 import { useData } from '@/lib/data';
 import type { Category, Stored } from '@/lib/model';
+import { CategoryIcon } from '@/components/category-icon';
 
 export default function Categories() {
   const { categories } = useData();
@@ -31,7 +32,7 @@ function Grid({ items }: { items: Stored<Category>[] }) {
           key={cat.path}
           onPress={() => router.push({ pathname: '/edit-category', params: { path: cat.path } })}
           style={({ pressed }) => [styles.tile, { backgroundColor: c.card }, pressed && { transform: [{ scale: 0.96 }] }]}>
-          <Emoji emoji={cat.emoji} color={cat.color} size={48} />
+          <CategoryIcon category={cat} size={48} />
           <Text numberOfLines={1} style={[styles.name, { color: c.text }]}>
             {cat.name}
           </Text>

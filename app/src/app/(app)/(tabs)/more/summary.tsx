@@ -4,9 +4,10 @@ import { Bars, Donut } from '@/components/charts';
 import { MonthStrip } from '@/components/month-strip';
 import { Segmented } from '@/components/native';
 import { rounded, useColors } from '@/components/theme';
-import { Card, Emoji, Empty, Money, Separator } from '@/components/ui';
+import { Card, Empty, Money, Separator } from '@/components/ui';
 import { useData } from '@/lib/data';
 import { addMonths, byCategory, inMonth, thisMonth, totals } from '@/lib/stats';
+import { CategoryIcon } from '@/components/category-icon';
 
 const SHORT_MONTH = new Intl.DateTimeFormat('en-US', { month: 'short' });
 
@@ -66,7 +67,7 @@ export default function Summary() {
               <View key={p.categoryId}>
                 {i > 0 && <Separator />}
                 <View style={styles.row}>
-                  <Emoji emoji={cat?.emoji ?? '💸'} color={cat?.color ?? c.secondary} size={36} />
+                  <CategoryIcon category={cat} size={36} />
                   <View style={{ flex: 1, gap: 4 }}>
                     <View style={styles.rowHead}>
                       <Text style={[styles.rowTitle, { color: c.text }]}>{cat?.name ?? 'Uncategorized'}</Text>

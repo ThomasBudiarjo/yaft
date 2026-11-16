@@ -21,6 +21,7 @@ export default function AppLayout() {
         <Stack.Screen name="edit-budget" options={{ presentation: 'modal' }} />
         <Stack.Screen name="edit-account" options={sheet} />
         <Stack.Screen name="edit-category" options={sheet} />
+        <Stack.Screen name="select-category" options={{ ...sheet, sheetAllowedDetents: [0.55, 1] }} />
       </Stack>
     </DataProvider>
   );

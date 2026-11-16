@@ -4,10 +4,11 @@ import { BudgetCard } from '@/components/budget-card';
 import { Donut, LineChart } from '@/components/charts';
 import { rounded, useColors } from '@/components/theme';
 import { DayGroupView } from '@/components/tx-row';
-import { Card, Emoji, Empty, Money, SectionHeader, Separator } from '@/components/ui';
+import { Card, Empty, Money, SectionHeader, Separator } from '@/components/ui';
 import { useData } from '@/lib/data';
 import { formatMoney } from '@/lib/model';
 import { byCategory, cumulativeSpending, groupByDay, inBudget, inMonth, thisMonth } from '@/lib/stats';
+import { CategoryIcon } from '@/components/category-icon';
 
 export default function BudgetDetail() {
   const c = useColors();
@@ -47,7 +48,7 @@ export default function BudgetDetail() {
                 <View key={p.categoryId}>
                   {i > 0 && <Separator />}
                   <View style={styles.row}>
-                    <Emoji emoji={cat?.emoji ?? '💸'} color={cat?.color ?? c.secondary} size={36} />
+                    <CategoryIcon category={cat} size={36} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.rowTitle, { color: c.text }]}>{cat?.name ?? 'Uncategorized'}</Text>
                       <Text style={{ color: c.secondary, fontSize: 13 }}>

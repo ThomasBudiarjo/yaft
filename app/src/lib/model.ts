@@ -13,6 +13,11 @@ export interface Account {
 export interface Category {
   id: string;
   name: string;
+  /**
+   * Key of a hand-drawn icon; `null` when the user chose `emoji` instead. Absent in categories
+   * saved before icons existed.
+   */
+  icon?: string | null;
   emoji: string;
   color: string;
   type: 'expense' | 'income';
@@ -139,20 +144,30 @@ export const PALETTE = [
 export const DEFAULT_ACCOUNTS: Account[] = [{ id: 'cash', name: 'Cash', currency: 'IDR', color: '#54A0FF', order: 0 }];
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  ['dining', 'Dining', '🍽️', '#FF9F43'],
-  ['groceries', 'Groceries', '🛒', '#1DD1A1'],
-  ['shopping', 'Shopping', '🛍️', '#FF9FF3'],
-  ['transit', 'Transit', '🚌', '#FECA57'],
-  ['entertainment', 'Entertainment', '🎬', '#5F27CD'],
-  ['bills', 'Bills & Fees', '🧾', '#48DBFB'],
-  ['gifts', 'Gifts', '🎁', '#EE5253'],
-  ['beauty', 'Beauty', '💄', '#FF6B6B'],
-  ['work', 'Work', '💼', '#8395A7'],
-  ['travel', 'Travel', '✈️', '#00D2D3'],
-  ['health', 'Health', '💊', '#10AC84'],
-  ['education', 'Education', '📚', '#2E86DE'],
-  ['salary', 'Salary', '💰', '#1DD1A1', 'income'],
-  ['other-income', 'Other Income', '💵', '#10AC84', 'income'],
-].map(([id, name, emoji, color, type = 'expense'], order) => ({
-  id, name, emoji, color, type: type as Category['type'], order,
+  ['dining', 'Dining', 'utensils', '🍽️', '#FF9F43'],
+  ['groceries', 'Groceries', 'cart', '🛒', '#1DD1A1'],
+  ['shopping', 'Shopping', 'bag', '🛍️', '#FF9FF3'],
+  ['transit', 'Transit', 'bus', '🚌', '#FECA57'],
+  ['entertainment', 'Entertainment', 'clapper', '🎬', '#5F27CD'],
+  ['bills', 'Bills & Fees', 'receipt', '🧾', '#48DBFB'],
+  ['gifts', 'Gifts', 'gift', '🎁', '#EE5253'],
+  ['beauty', 'Beauty', 'lipstick', '💄', '#FF6B6B'],
+  ['work', 'Work', 'briefcase', '💼', '#8395A7'],
+  ['travel', 'Travel', 'plane', '✈️', '#00D2D3'],
+  ['health', 'Health', 'pill', '💊', '#10AC84'],
+  ['education', 'Education', 'graduation', '📚', '#2E86DE'],
+  ['salary', 'Salary', 'money-bag', '💰', '#1DD1A1', 'income'],
+  ['other-income', 'Other Income', 'cash', '💵', '#10AC84', 'income'],
+].map(([id, name, icon, emoji, color, type = 'expense'], order) => ({
+  id, name, icon, emoji, color, type: type as Category['type'], order,
 }));
+
+/**
+ * The icon to draw for a category, or undefined to show its emoji. Default categories saved
+ * before icons existed get their preset icon, unless the user has since changed their emoji.
+ */
+export function categoryIcon(category: Pick<Category, 'id' | 'icon' | 'emoji'>): string | undefined {
+  if (category.icon !== undefined) return category.icon ?? undefined;
+  const preset = DEFAULT_CATEGORIES.find((d) => d.id === category.id);
+  return preset && preset.emoji === category.emoji ? (preset.icon ?? undefined) : undefined;
+}
