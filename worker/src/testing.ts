@@ -54,7 +54,7 @@ export interface FakeGitHub {
   fetch: typeof fetch;
 }
 
-/** One user (thomas, id 42) with the app installed on thomas/money. */
+/** One user (thomas, id 42) with the app installed on thomas/money, plus the exchange rate source. */
 export function fakeGitHub(files: Record<string, unknown> = {}): FakeGitHub {
   const gh: FakeGitHub = {
     files: new Map(Object.entries(files).map(([p, v]) => [p, typeof v === "string" ? v : JSON.stringify(v)])),
@@ -65,6 +65,10 @@ export function fakeGitHub(files: Record<string, unknown> = {}): FakeGitHub {
       const url = new URL(String(input));
       const body = typeof init?.body === "string" ? init.body : init?.body ? String(init.body) : "";
       if (url.href === "https://github.com/login/oauth/access_token") return tokenEndpoint(new URLSearchParams(body));
+      // The rate source, with 1 SGD = 10,000 IDR; every other base is missing.
+      if (url.href === "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/idr.json") {
+        return Response.json({ date: "2026-11-16", idr: { idr: 1, sgd: 0.0001 } });
+      }
       if (url.host !== "api.github.com") throw new Error(`unexpected fetch ${url}`);
       const headers = new Headers(init?.headers);
       // Like GitHub, which answers 403 to API requests without one.

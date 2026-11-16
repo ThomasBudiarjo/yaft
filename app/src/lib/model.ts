@@ -48,7 +48,7 @@ export function balanceEffect(tx: Transaction, accountId?: string): number {
   if (tx.type === 'expense') return !accountId || tx.accountId === accountId ? -tx.amount : 0;
   if (!accountId) return 0;
   if (tx.accountId === accountId) return -tx.amount;
-  if (tx.toAccountId === accountId) return tx.amount;
+  if (tx.toAccountId === accountId) return tx.toAmount ?? tx.amount;
   return 0;
 }
 

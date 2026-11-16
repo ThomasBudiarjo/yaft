@@ -7,8 +7,8 @@ import { rounded, useColors } from '@/components/theme';
 import { DayGroupView } from '@/components/tx-row';
 import { Card, Empty, Money } from '@/components/ui';
 import { useData } from '@/lib/data';
-import { formatMoney } from '@/lib/model';
-import { accountBalances, balanceSeries, groupByDay, inMonth, thisMonth, totals } from '@/lib/stats';
+import { balanceEffect, formatMoney } from '@/lib/model';
+import { balanceSeries, groupByDay, inMonth, thisMonth, totals } from '@/lib/stats';
 
 const SHORT_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 
@@ -16,19 +16,35 @@ export default function Home() {
   const c = useColors();
   const data = useData();
   const [accountId, setAccountId] = useState<string>();
-  const currency = (data.account(accountId) ?? data.accounts[0])?.currency ?? 'IDR';
+  const selected = data.account(accountId);
+  // One account shows its own currency; everything together is in the main currency.
+  const currency = selected?.currency ?? data.baseCurrency;
 
-  const txs = accountId
-    ? data.transactions.filter((t) => t.accountId === accountId || t.toAccountId === accountId)
+  const txs = selected
+    ? data.transactions.filter((t) => t.accountId === selected.id || t.toAccountId === selected.id)
     : data.transactions;
-  const month = totals(txs.filter((t) => inMonth(t, thisMonth())), accountId);
-  const balances = accountBalances(data.transactions);
-  const total = [...balances.values()].reduce((s, v) => s + v, 0);
-  const series = balanceSeries(data.transactions, 30, accountId).map((p) => {
+  const monthTxs = txs.filter((t) => inMonth(t, thisMonth()));
+  const month = selected ? totals(monthTxs, selected.id) : totals(data.inBase(monthTxs));
+
+  const valued = data.accounts.map((a) => ({ account: a, value: data.toBase(data.balances.get(a.id) ?? 0, a.currency) }));
+  const total = valued.reduce((s, v) => s + (v.value ?? 0), 0);
+  const invested = valued.reduce((s, v) => s + (v.account.type === 'investment' ? (v.value ?? 0) : 0), 0);
+  const waitingForRates = valued.some((v) => v.value === null);
+
+  // The total's line is each account's own line in the main currency, so it ends at the total above.
+  const perAccount = selected ? [selected] : data.accounts;
+  const lines = perAccount.map((a) => balanceSeries(txs, 30, a.id, undefined, a.openingBalance));
+  const series = (lines[0] ?? []).map((p, i) => {
     const [y, m, d] = p.day.split('-').map(Number);
-    return { label: SHORT_DAY.format(new Date(y, m - 1, d)), value: p.value };
+    const value = selected
+      ? p.value
+      : perAccount.reduce((s, a, j) => s + (data.toBase(lines[j][i].value, a.currency) ?? 0), 0);
+    return { label: SHORT_DAY.format(new Date(y, m - 1, d)), value };
   });
-  const recent = groupByDay(txs.slice(0, 12));
+  const recent = groupByDay(
+    txs.slice(0, 12),
+    selected ? undefined : (tx) => (data.inBase([tx]).map((b) => balanceEffect(b))[0] ?? 0),
+  );
   const counts = new Map<string, number>();
   for (const t of data.transactions) {
     counts.set(t.accountId, (counts.get(t.accountId) ?? 0) + 1);
@@ -45,17 +61,31 @@ export default function Home() {
           <AccountCard
             name="All accounts"
             balance={total}
+            note={
+              waitingForRates
+                ? 'Waiting for exchange rates'
+                : invested
+                  ? `${formatMoney(invested, data.baseCurrency, { compact: true })} invested`
+                  : undefined
+            }
             count={data.transactions.length}
-            currency={currency}
+            currency={data.baseCurrency}
             color={c.tint}
             selected={!accountId}
             onPress={() => setAccountId(undefined)}
           />
-          {data.accounts.map((a) => (
+          {valued.map(({ account: a, value }) => (
             <AccountCard
               key={a.id}
               name={a.name}
-              balance={balances.get(a.id) ?? 0}
+              balance={data.balances.get(a.id) ?? 0}
+              note={
+                a.currency !== data.baseCurrency && value !== null
+                  ? `≈ ${formatMoney(value, data.baseCurrency, { compact: true })}`
+                  : a.type === 'investment'
+                    ? 'Capital'
+                    : undefined
+              }
               count={counts.get(a.id) ?? 0}
               currency={a.currency}
               color={a.color}
@@ -121,6 +151,8 @@ export default function Home() {
 function AccountCard(props: {
   name: string;
   balance: number;
+  /** Shown instead of the transaction count. */
+  note?: string;
   count: number;
   currency: string;
   color: string;
@@ -136,8 +168,8 @@ function AccountCard(props: {
           {props.name}
         </Text>
         <Money amount={props.balance} currency={props.currency} style={styles.accountBalance} />
-        <Text style={[styles.small, { color: c.secondary }]}>
-          {props.count} transaction{props.count === 1 ? '' : 's'}
+        <Text numberOfLines={1} style={[styles.small, { color: c.secondary }]}>
+          {props.note ?? `${props.count} transaction${props.count === 1 ? '' : 's'}`}
         </Text>
       </Card>
     </Pressable>

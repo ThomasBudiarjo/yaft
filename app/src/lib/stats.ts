@@ -1,4 +1,4 @@
-import { balanceEffect, dayKey, toLocalIso, type Budget, type Transaction } from './model';
+import { balanceEffect, dayKey, toLocalIso, type Account, type Budget, type Transaction } from './model';
 
 export interface Month {
   year: number;
@@ -49,30 +49,33 @@ export interface DayGroup<T extends Transaction = Transaction> {
   data: T[];
 }
 
-/** Groups newest-first transactions by local day, keeping their order. */
-export function groupByDay<T extends Transaction>(txs: T[]): DayGroup<T>[] {
+/**
+ * Groups newest-first transactions by local day, keeping their order. `effect` gives each one's
+ * part of the day's net, such as its value in the main currency.
+ */
+export function groupByDay<T extends Transaction>(txs: T[], effect: (tx: T) => number = balanceEffect): DayGroup<T>[] {
   const groups: DayGroup<T>[] = [];
   for (const tx of txs) {
     const day = dayKey(tx.date);
     let g = groups[groups.length - 1];
     if (!g || g.day !== day) groups.push((g = { day, net: 0, data: [] }));
     g.data.push(tx);
-    g.net += balanceEffect(tx);
+    g.net += effect(tx);
   }
   return groups;
 }
 
 /**
- * End-of-day balance for each of the last `days` days, ending today.
- * The balance before the window is the sum of everything older, so the line starts at the real level.
+ * End-of-day balance for each of the last `days` days, ending today. The balance before the
+ * window is `opening` plus everything older, so the line starts at the real level.
  */
-export function balanceSeries(txs: Transaction[], days: number, accountId?: string, now = new Date()) {
+export function balanceSeries(txs: Transaction[], days: number, accountId?: string, now = new Date(), opening = 0) {
   const keys: string[] = [];
   for (let i = days - 1; i >= 0; i--) {
     keys.push(dayKey(toLocalIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i))));
   }
   const perDay = new Map<string, number>();
-  let balance = 0;
+  let balance = opening;
   for (const tx of txs) {
     const effect = balanceEffect(tx, accountId);
     const day = dayKey(tx.date);
@@ -114,16 +117,16 @@ export function budgetProgress(txs: Transaction[], budget: Budget, now = new Dat
   };
 }
 
-/** Current balance of every account. */
-export function accountBalances(txs: Transaction[]): Map<string, number> {
-  const out = new Map<string, number>();
+/** Current balance of every account, in its own currency, starting from its opening balance. */
+export function accountBalances(txs: Transaction[], accounts: Pick<Account, 'id' | 'openingBalance'>[] = []): Map<string, number> {
+  const out = new Map<string, number>(accounts.map((a) => [a.id, a.openingBalance ?? 0]));
   const add = (id: string | undefined, v: number) => id && out.set(id, (out.get(id) ?? 0) + v);
   for (const tx of txs) {
     if (tx.type === 'income') add(tx.accountId, tx.amount);
     else if (tx.type === 'expense') add(tx.accountId, -tx.amount);
     else {
       add(tx.accountId, -tx.amount);
-      add(tx.toAccountId, tx.amount);
+      add(tx.toAccountId, tx.toAmount ?? tx.amount);
     }
   }
   return out;

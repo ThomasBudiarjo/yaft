@@ -6,7 +6,7 @@ import { rounded, useColors } from '@/components/theme';
 import { DayGroupView } from '@/components/tx-row';
 import { Card, Empty, Money, SectionHeader, Separator } from '@/components/ui';
 import { useData } from '@/lib/data';
-import { formatMoney } from '@/lib/model';
+import { balanceEffect, formatMoney } from '@/lib/model';
 import { byCategory, cumulativeSpending, groupByDay, inBudget, inMonth, thisMonth } from '@/lib/stats';
 import { CategoryIcon } from '@/components/category-icon';
 
@@ -17,12 +17,12 @@ export default function BudgetDetail() {
   const budget = data.budgets.find((b) => b.id === id);
   if (!budget) return <Empty emoji="🫥" title="Budget not found" />;
 
-  const currency = data.accounts[0]?.currency ?? 'IDR';
+  const currency = data.baseCurrency;
   const month = thisMonth();
   const txs = data.transactions.filter((t) => inBudget(t, budget) && inMonth(t, month));
-  const parts = byCategory(txs, 'expense');
+  const parts = byCategory(data.inBase(txs), 'expense');
   const total = parts.reduce((s, p) => s + p.total, 0);
-  const curve = cumulativeSpending(data.transactions, budget, month).map((p) => ({ label: `Day ${p.day}`, value: p.value }));
+  const curve = cumulativeSpending(data.inBase(txs), budget, month).map((p) => ({ label: `Day ${p.day}`, value: p.value }));
 
   return (
     <>
@@ -74,7 +74,7 @@ export default function BudgetDetail() {
         </Card>
 
         {txs.length > 0 && <SectionHeader title="Transactions" />}
-        {groupByDay(txs).map((g) => (
+        {groupByDay(txs, (tx) => data.inBase([tx]).map((b) => balanceEffect(b))[0] ?? 0).map((g) => (
           <DayGroupView key={g.day} group={g} currency={currency} />
         ))}
       </ScrollView>

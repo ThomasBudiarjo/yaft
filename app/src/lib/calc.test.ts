@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { evaluate, press } from './calc';
+import { evaluate, parseAmount, press } from './calc';
 import { ulid } from './model';
 
 test('multiplication and division bind tighter than addition and subtraction', () => {
@@ -27,4 +27,18 @@ test('ulids sort by creation time', () => {
   expect(a.length).toBe(26);
   expect(a < b).toBe(true);
   expect(ulid(0, zeros)).toBe('0'.repeat(26));
+});
+
+test('amounts pasted from banks parse with either thousands separator', () => {
+  expect(parseAmount('21,274,464.65')).toBe(21274464.65);
+  expect(parseAmount('21.274.464,65')).toBe(21274464.65);
+  // One separator with three digits after it groups thousands; otherwise it is the decimal point.
+  expect(parseAmount('1.000')).toBe(1000);
+  expect(parseAmount('1,000')).toBe(1000);
+  expect(parseAmount('1,5')).toBe(1.5);
+  expect(parseAmount('0,125')).toBe(0.125);
+  expect(parseAmount('357,1204843')).toBe(357.1204843);
+  expect(parseAmount('12,')).toBe(12);
+  expect(parseAmount('abc')).toBeNull();
+  expect(parseAmount('')).toBeNull();
 });

@@ -16,15 +16,16 @@ export default function Summary() {
   const data = useData();
   const [month, setMonth] = useState(thisMonth());
   const [type, setType] = useState<'expense' | 'income'>('expense');
-  const currency = data.accounts[0]?.currency ?? 'IDR';
+  const currency = data.baseCurrency;
 
-  const txs = data.transactions.filter((t) => inMonth(t, month));
+  const all = data.inBase(data.transactions);
+  const txs = all.filter((t) => inMonth(t, month));
   const sums = totals(txs);
   const parts = byCategory(txs, type);
   const total = parts.reduce((s, p) => s + p.total, 0);
   const history = Array.from({ length: 6 }, (_, i) => {
     const m = addMonths(month, i - 5);
-    const t = totals(data.transactions.filter((tx) => inMonth(tx, m)));
+    const t = totals(all.filter((tx) => inMonth(tx, m)));
     return { label: SHORT_MONTH.format(new Date(m.year, m.month, 1)), expense: t.expense, income: t.income };
   });
 

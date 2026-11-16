@@ -8,9 +8,9 @@ import { Card } from './ui';
 
 export function BudgetCard({ budget, onPress }: { budget: Budget; onPress?(): void }) {
   const c = useColors();
-  const { transactions, accounts } = useData();
-  const currency = accounts[0]?.currency ?? 'IDR';
-  const p = budgetProgress(transactions, budget);
+  const data = useData();
+  const currency = data.baseCurrency;
+  const p = budgetProgress(data.inBase(data.transactions), budget);
   const over = p.left < 0;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }}>

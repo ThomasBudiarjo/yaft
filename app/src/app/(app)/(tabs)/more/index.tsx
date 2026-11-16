@@ -1,5 +1,5 @@
-import { Button, Form, Host, HStack, Image, Section, Spacer, Text } from '@expo/ui/swift-ui';
-import { background, buttonStyle, clipShape, foregroundStyle, frame } from '@expo/ui/swift-ui/modifiers';
+import { Button, Form, Host, HStack, Image, Picker, Section, Spacer, Text } from '@expo/ui/swift-ui';
+import { background, buttonStyle, clipShape, foregroundStyle, frame, tag } from '@expo/ui/swift-ui/modifiers';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Alert } from 'react-native';
@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useData } from '@/lib/data';
 
 const TIME = new Intl.DateTimeFormat('en-US', { timeStyle: 'short' });
+const COMMON_CURRENCIES = ['IDR', 'USD', 'SGD', 'EUR', 'JPY', 'GBP', 'AUD', 'MYR'];
 
 function Row({ icon, color, title, value, onPress }: {
   icon: string;
@@ -47,6 +48,7 @@ export default function More() {
           : sync.lastSyncedAt
             ? `Synced ${TIME.format(sync.lastSyncedAt)}`
             : 'Up to date';
+  const currencies = [...new Set([data.baseCurrency, ...data.accounts.map((a) => a.currency), ...COMMON_CURRENCIES])];
 
   return (
     <Host style={{ flex: 1 }}>
@@ -73,6 +75,20 @@ export default function More() {
             title={`${data.repo.owner}/${data.repo.name}`}
             onPress={() => void WebBrowser.openBrowserAsync(`https://github.com/${data.repo.owner}/${data.repo.name}`)}
           />
+        </Section>
+        <Section
+          title="Main currency"
+          footer={<Text>Totals and budgets are shown in this currency. Other currencies are converted at the day&apos;s rate.</Text>}>
+          <Picker
+            label="Main currency"
+            selection={data.baseCurrency}
+            onSelectionChange={(code: string) => void data.setBaseCurrency(code)}>
+            {currencies.map((code) => (
+              <Text key={code} modifiers={[tag(code)]}>
+                {code}
+              </Text>
+            ))}
+          </Picker>
         </Section>
         <Section title="Data">
           <Row icon="chart.bar.xaxis" color="#5F27CD" title="Spending summary" onPress={() => router.push('/more/summary')} />

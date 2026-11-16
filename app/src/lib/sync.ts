@@ -22,7 +22,7 @@ export interface SyncResult {
   pushed: number;
 }
 
-const DATA_FILE = /^(accounts|categories|budgets|tx)\/.+\.json$/;
+const DATA_FILE = /^(accounts|categories|budgets|tx|settings)\/.+\.json$/;
 const MAX_ATTEMPTS = 3;
 export const MANIFEST_PATH = 'yaft.json';
 

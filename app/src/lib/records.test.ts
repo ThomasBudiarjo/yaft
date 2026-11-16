@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { parseRecord } from './records';
+import { convert, parseRecord } from './records';
 
 const tx = { id: 'T1', type: 'expense', amount: 25000, accountId: 'cash', categoryId: 'dining', title: 'Lunch', note: '', date: '2026-11-16T12:30:00', createdAt: 'c', updatedAt: 'u' };
 
@@ -57,4 +57,33 @@ test('accounts and budgets need their core fields', () => {
   expect(parseRecord('accounts', { id: 'cash', name: 'Cash' })).toBeNull();
   expect(parseRecord('budgets', { id: 'b', name: 'Food', amount: '100' })).toBeNull();
   expect(parseRecord('budgets', { id: 'b', name: 'Food', amount: 100, categoryIds: ['dining', 3] })?.categoryIds).toEqual(['dining']);
+});
+
+test('only a transfer keeps what arrived in the other currency', () => {
+  const transfer = { ...tx, type: 'transfer', toAccountId: 'sgd', toAmount: 100 };
+  expect(parseRecord('tx', transfer)?.toAmount).toBe(100);
+  expect(parseRecord('tx', { ...transfer, toAmount: 0 })).toBeNull();
+  expect(parseRecord('tx', { ...tx, toAmount: 100 })).not.toHaveProperty('toAmount');
+});
+
+test('accounts keep an investment type and a non-zero opening balance', () => {
+  const base = { id: 'stock', name: 'Saham', currency: 'IDR' };
+  expect(parseRecord('accounts', { ...base, type: 'investment', openingBalance: 2_000_000 })).toMatchObject({ type: 'investment', openingBalance: 2_000_000 });
+  expect(parseRecord('accounts', { ...base, type: 'cash', openingBalance: 0 })).toEqual({ ...base, color: '#8395A7', order: 0 });
+  expect(parseRecord('accounts', { ...base, currency: 'USDT' })?.currency).toBe('USDT');
+  expect(parseRecord('accounts', { ...base, currency: 'idr' })).toBeNull();
+});
+
+test('settings name a main currency', () => {
+  expect(parseRecord('settings', { id: 'main', baseCurrency: 'SGD' })).toEqual({ id: 'main', baseCurrency: 'SGD' });
+  expect(parseRecord('settings', { id: 'main', baseCurrency: 'Rupiah' })).toBeNull();
+});
+
+test('converting divides by the rate per unit of the main currency, and needs a rate', () => {
+  const rates = { base: 'IDR', date: '2026-11-16', perBase: { sgd: 0.0001 } };
+  expect(convert(140, 'SGD', 'IDR', rates)).toBeCloseTo(1_400_000);
+  expect(convert(500, 'IDR', 'IDR', null)).toBe(500);
+  expect(convert(5, 'USD', 'IDR', rates)).toBeNull();
+  // Rates for another base are not used, even when they list the currency.
+  expect(convert(140, 'SGD', 'USD', rates)).toBeNull();
 });

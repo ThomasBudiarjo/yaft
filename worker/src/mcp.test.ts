@@ -134,7 +134,7 @@ class Agent {
   }
 }
 
-function useGitHub(files = SEED): FakeGitHub {
+function useGitHub(files: Record<string, unknown> = SEED): FakeGitHub {
   const gh = fakeGitHub(files);
   globalThis.fetch = gh.fetch;
   return gh;
@@ -148,7 +148,7 @@ test("an agent connects through GitHub and adds a transaction the app can read",
   const tools = await agent.rpc("tools/list");
   assert.deepEqual(
     tools.result.tools.map((t: { name: string }) => t.name).sort(),
-    ["add_transaction", "list_accounts_and_categories", "list_transactions", "month_summary", "update_transaction"],
+    ["account_balances", "add_transaction", "list_accounts_and_categories", "list_transactions", "month_summary", "update_transaction"],
   );
 
   const before = localNow("Asia/Jakarta");
@@ -200,12 +200,49 @@ test("a month summary counts transactions dated in that month, skipping malforme
   assert.deepEqual(nov.transactions.map((t: { id: string }) => t.id), ["01NEW"]);
 });
 
+test("balances and summaries are in the main currency, and a transfer between currencies says what arrived", async () => {
+  const gh = useGitHub({
+    "yaft.json": { app: "yaft", version: 1 },
+    "settings/main.json": { id: "main", baseCurrency: "IDR" },
+    // The first account is in SGD, so only the setting makes IDR the main currency.
+    "accounts/sgd.json": { id: "sgd", name: "DBS", currency: "SGD", color: "#54A0FF", order: 0, openingBalance: 50 },
+    "accounts/bank.json": { id: "bank", name: "BCA", currency: "IDR", color: "#54A0FF", order: 1, openingBalance: 1000000 },
+    "accounts/stock.json": { id: "stock", name: "Saham", currency: "IDR", color: "#54A0FF", order: 2, type: "investment", openingBalance: 2000000 },
+    "categories/dining.json": { id: "dining", name: "Dining", emoji: "🍽️", color: "#FF9F43", type: "expense", order: 0 },
+    "tx/2026/11/01SGD.json": { id: "01SGD", type: "expense", amount: 10, accountId: "sgd", categoryId: "dining", title: "Laksa", note: "", date: "2026-11-05T12:00:00", createdAt: "x", updatedAt: "x" },
+  });
+  const agent = new Agent();
+  await agent.connect({ write: true });
+  const transfer = { type: "transfer", amount: 1000000, accountId: "bank", toAccountId: "sgd", date: "2026-11-06T09:00:00" };
+
+  const missing = await agent.call("add_transaction", transfer);
+  assert.equal(missing.isError, true);
+  assert.match(missing.text, /BCA is in IDR and DBS is in SGD\. Pass toAmount/);
+  assert.equal((await agent.call("add_transaction", { ...transfer, toAmount: 100 })).isError, false);
+  // Between accounts in one currency, a stray toAmount is dropped rather than overriding amount.
+  assert.equal((await agent.call("add_transaction", { ...transfer, toAccountId: "stock", amount: 500, toAmount: 999 })).isError, false);
+  const saved = [...gh.files].filter(([p]) => p.startsWith("tx/")).map(([, text]) => parseRecord("tx", JSON.parse(text))!);
+  assert.deepEqual(saved.filter((t) => t.type === "transfer").map((t) => [t.toAccountId, t.toAmount]).sort(), [["sgd", 100], ["stock", undefined]]);
+
+  const balances = JSON.parse((await agent.call("account_balances")).text);
+  assert.equal(balances.mainCurrency, "IDR");
+  assert.deepEqual(
+    balances.accounts.map((a: { id: string; balance: number; inMainCurrency: number }) => [a.id, a.balance, a.inMainCurrency]),
+    [["sgd", 140, 1400000], ["bank", -500, -500], ["stock", 2000500, 2000500]],
+  );
+  assert.deepEqual(balances.totals, { cash: 1399500, invested: 2000500, total: 3400000 });
+
+  const summary = JSON.parse((await agent.call("month_summary", { month: "2026-11" })).text);
+  assert.equal(summary.currency, "IDR");
+  assert.equal(summary.expense, 100000);
+});
+
 test("a read-only grant gets no tools that write", async () => {
   useGitHub();
   const agent = new Agent();
   await agent.connect({ write: false });
   const tools = await agent.rpc("tools/list");
-  assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name).sort(), ["list_accounts_and_categories", "list_transactions", "month_summary"]);
+  assert.deepEqual(tools.result.tools.map((t: { name: string }) => t.name).sort(), ["account_balances", "list_accounts_and_categories", "list_transactions", "month_summary"]);
   const call = await agent.rpc("tools/call", { name: "add_transaction", arguments: { type: "expense", amount: 1, accountId: "cash" } });
   assert.ok(call.error || call.result?.isError);
 });

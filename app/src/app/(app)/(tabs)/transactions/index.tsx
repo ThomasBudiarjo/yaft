@@ -6,7 +6,7 @@ import { useColors } from '@/components/theme';
 import { DayGroupView } from '@/components/tx-row';
 import { Card, Empty, Money } from '@/components/ui';
 import { useData } from '@/lib/data';
-import type { TxType } from '@/lib/model';
+import { balanceEffect, type TxType } from '@/lib/model';
 import { groupByDay, inMonth, monthLabel, thisMonth, totals } from '@/lib/stats';
 
 const SEARCH_LIMIT = 200;
@@ -23,7 +23,8 @@ export default function Transactions() {
   const [month, setMonth] = useState(thisMonth());
   const [query, setQuery] = useState('');
   const [type, setType] = useState<'all' | TxType>('all');
-  const currency = data.accounts[0]?.currency ?? 'IDR';
+  // Rows keep their account's currency; sums are in the main currency.
+  const currency = data.baseCurrency;
 
   const q = query.trim().toLowerCase();
   const filtered = data.transactions.filter((t) => {
@@ -34,8 +35,8 @@ export default function Transactions() {
     return `${t.title} ${t.note} ${category} ${account}`.toLowerCase().includes(q);
   });
   const shown = q ? filtered.slice(0, SEARCH_LIMIT) : filtered;
-  const sums = totals(filtered);
-  const groups = groupByDay(shown);
+  const sums = totals(data.inBase(filtered));
+  const groups = groupByDay(shown, (tx) => data.inBase([tx]).map((b) => balanceEffect(b))[0] ?? 0);
 
   return (
     <>

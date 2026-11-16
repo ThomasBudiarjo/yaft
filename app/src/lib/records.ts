@@ -9,6 +9,10 @@ export interface Account {
   currency: string;
   color: string;
   order: number;
+  /** Absent means cash. An investment account shows the capital put in, not a market value. */
+  type?: 'cash' | 'investment';
+  /** What the account held before its first transaction; for an investment, the capital already in it. */
+  openingBalance?: number;
 }
 
 export interface Category {
@@ -33,6 +37,8 @@ export interface Transaction {
   accountId: string;
   /** Transfers only. */
   toAccountId?: string;
+  /** Transfers between currencies only: what arrived in `toAccountId`, in its currency. */
+  toAmount?: number;
   /** Expenses and income only. */
   categoryId?: string;
   title: string;
@@ -53,13 +59,21 @@ export interface Budget {
   color: string;
 }
 
-export type Kind = 'accounts' | 'categories' | 'budgets' | 'tx';
+/** Shared by every device, at `settings/main.json`. */
+export interface Settings {
+  id: 'main';
+  /** Totals, budgets, and summaries are shown in this currency. */
+  baseCurrency: string;
+}
+
+export type Kind = 'accounts' | 'categories' | 'budgets' | 'tx' | 'settings';
 
 export interface RecordOf {
   accounts: Account;
   categories: Category;
   budgets: Budget;
   tx: Transaction;
+  settings: Settings;
 }
 
 /** A record plus the repository path it lives at. */
@@ -128,8 +142,13 @@ type Fields = Record<string, unknown> & { id: string };
 
 const PARSERS: { [K in Kind]: (v: Fields) => RecordOf[K] | null } = {
   accounts(v) {
-    if (!nonEmpty(v.name) || !nonEmpty(v.currency)) return null;
-    return { id: v.id, name: v.name, currency: v.currency, color: text(v.color, GRAY), order: num(v.order) };
+    if (!nonEmpty(v.name) || !isCurrency(v.currency)) return null;
+    const account: Account = { id: v.id, name: v.name, currency: v.currency, color: text(v.color, GRAY), order: num(v.order) };
+    if (v.type === 'investment') account.type = 'investment';
+    if (typeof v.openingBalance === 'number' && Number.isFinite(v.openingBalance) && v.openingBalance !== 0) {
+      account.openingBalance = v.openingBalance;
+    }
+    return account;
   },
 
   categories(v) {
@@ -170,18 +189,80 @@ const PARSERS: { [K in Kind]: (v: Fields) => RecordOf[K] | null } = {
     if (v.type === 'transfer') {
       if (!nonEmpty(v.toAccountId) || v.toAccountId === v.accountId) return null;
       tx.toAccountId = v.toAccountId;
+      if (v.toAmount !== undefined) {
+        if (!isAmount(v.toAmount, false)) return null;
+        tx.toAmount = v.toAmount;
+      }
     } else if (nonEmpty(v.categoryId)) {
       tx.categoryId = v.categoryId;
     }
     return tx;
+  },
+
+  settings(v) {
+    if (v.id !== 'main' || !isCurrency(v.baseCurrency)) return null;
+    return { id: 'main', baseCurrency: v.baseCurrency };
   },
 };
 
 const GRAY = '#8395A7';
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** ISO 4217 codes, plus a few longer crypto tickers such as USDT. */
+export const isCurrency = (v: unknown): v is string => typeof v === 'string' && /^[A-Z]{3,5}$/.test(v);
 const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 const text = (v: unknown, fallback: string) => (typeof v === 'string' ? v : fallback);
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const isAmount = (v: unknown, zeroOk: boolean): v is number =>
   typeof v === 'number' && Number.isFinite(v) && (zeroOk ? v >= 0 : v > 0);
+
+/** Exchange rates for one base currency: units of each currency per one unit of `base`. */
+export interface Rates {
+  base: string;
+  /** The day the rates are for, `YYYY-MM-DD`. */
+  date: string;
+  /** Keyed by lowercase code, as the currency API publishes them. */
+  perBase: Record<string, number>;
+}
+
+/**
+ * Daily rates for 300+ currencies including crypto, free and without a key
+ * (github.com/fawazahmed0/exchange-api). The second URL is the project's own fallback.
+ */
+export function ratesUrls(base: string): string[] {
+  const code = base.toLowerCase();
+  return [
+    `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${code}.json`,
+    `https://latest.currency-api.pages.dev/v1/currencies/${code}.json`,
+  ];
+}
+
+export function parseRates(base: string, value: unknown): Rates | null {
+  if (!isObject(value) || typeof value.date !== 'string') return null;
+  const table = value[base.toLowerCase()];
+  if (!isObject(table)) return null;
+  const perBase: Record<string, number> = {};
+  for (const [code, rate] of Object.entries(table)) if (isAmount(rate, false)) perBase[code] = rate;
+  return { base, date: value.date, perBase };
+}
+
+/** `amount` of `currency` in `base`, or null when there are no rates for it yet. */
+export function convert(amount: number, currency: string, base: string, rates: Rates | null): number | null {
+  if (currency === base) return amount;
+  const rate = rates?.base === base ? rates.perBase[currency.toLowerCase()] : undefined;
+  return rate ? amount / rate : null;
+}
+
+/** Today's rates for `base`, trying each source in turn. */
+export async function fetchRates(base: string, fetchImpl: typeof fetch = fetch): Promise<Rates> {
+  for (const url of ratesUrls(base)) {
+    try {
+      const res = await fetchImpl(url);
+      const rates = res.ok ? parseRates(base, await res.json()) : null;
+      if (rates) return rates;
+    } catch {
+      // Try the next source.
+    }
+  }
+  throw new Error(`No exchange rates for ${base} right now.`);
+}

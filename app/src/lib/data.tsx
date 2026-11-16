@@ -4,8 +4,10 @@ import { AppState } from 'react-native';
 import { useAuth } from './auth';
 import { createGitHub, GitHubError, type Repo } from './github';
 import {
+  convert,
   DEFAULT_ACCOUNTS,
   DEFAULT_CATEGORIES,
+  fetchRates,
   parseRecord,
   pathFor,
   serialize,
@@ -13,9 +15,12 @@ import {
   type Budget,
   type Category,
   type Kind,
+  type Rates,
+  type Settings,
   type Stored,
   type Transaction,
 } from './model';
+import { accountBalances } from './stats';
 import { createStore, SCHEMA } from './store';
 import { sync } from './sync';
 
@@ -25,6 +30,7 @@ export interface Snapshot {
   budgets: Stored<Budget>[];
   /** Newest first. */
   transactions: Stored<Transaction>[];
+  settings?: Stored<Settings>;
   pending: number;
 }
 
@@ -42,11 +48,23 @@ interface DataValue extends Snapshot {
   remove(path: string): Promise<void>;
   account(id?: string): Stored<Account> | undefined;
   category(id?: string): Stored<Category> | undefined;
+  /** Totals, budgets, and summaries are in this currency. */
+  baseCurrency: string;
+  setBaseCurrency(code: string): Promise<void>;
+  /** Today's rates for `baseCurrency`, cached on the device; null until the first download. */
+  rates: (Rates & { fetchedAt: number }) | null;
+  /** Each account's balance in its own currency, opening balance included. */
+  balances: Map<string, number>;
+  /** `amount` of `currency` in the main currency; null while there is no rate for it. */
+  toBase(amount: number, currency: string): number | null;
+  /** Copies with amounts in the main currency, for totals; ones without a rate are left out. */
+  inBase(txs: Stored<Transaction>[]): Stored<Transaction>[];
 }
 
 const DataContext = createContext<DataValue | null>(null);
 const PUSH_DELAY_MS = 1500;
 const POLL_MS = 60_000;
+const RATES_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 /** One database per repository, so switching repositories never mixes their records. */
 export function DataProvider({ repo, children }: { repo: Repo; children: ReactNode }) {
@@ -84,6 +102,10 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
       else if (kind === 'accounts') push(next.accounts, parseRecord(kind, value), path);
       else if (kind === 'categories') push(next.categories, parseRecord(kind, value), path);
       else if (kind === 'budgets') push(next.budgets, parseRecord(kind, value), path);
+      else if (kind === 'settings') {
+        const settings = parseRecord(kind, value);
+        if (settings) next.settings = { ...settings, path };
+      }
     }
     next.accounts.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
     next.categories.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
@@ -159,10 +181,41 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
     };
   }, [reload, syncNow]);
 
+  // Before anyone picks one, the main currency is the first account's, as it was before settings existed.
+  const baseCurrency = snapshot?.settings?.baseCurrency ?? snapshot?.accounts[0]?.currency ?? 'IDR';
+  const needsRates = !!snapshot?.accounts.some((a) => a.currency !== baseCurrency);
+  const [rates, setRates] = useState<DataValue['rates']>(null);
+
+  // Download rates at most every 12 hours, and only while some account is in another currency.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const raw = await store.getMeta('rates');
+      const cached = raw ? (JSON.parse(raw) as NonNullable<DataValue['rates']>) : null;
+      if (cached?.base !== baseCurrency) {
+        setRates(null);
+      } else {
+        setRates((current) => (current?.fetchedAt === cached.fetchedAt ? current : cached));
+        if (Date.now() - cached.fetchedAt < RATES_MAX_AGE_MS) return;
+      }
+      if (!needsRates) return;
+      const fresh = { ...(await fetchRates(baseCurrency)), fetchedAt: Date.now() };
+      await store.setMeta('rates', JSON.stringify(fresh));
+      if (live) setRates(fresh);
+    })().catch(() => {
+      // Offline or the rate sources are down: keep the cached rates and try again on the next sync.
+    });
+    return () => {
+      live = false;
+    };
+  }, [store, baseCurrency, needsRates, syncState.lastSyncedAt]);
+
   const value = useMemo<DataValue | null>(() => {
     if (!snapshot) return null;
     const accounts = new Map(snapshot.accounts.map((a) => [a.id, a]));
     const categories = new Map(snapshot.categories.map((c) => [c.id, c]));
+    const toBase = (amount: number, currency: string) => convert(amount, currency, baseCurrency, rates);
+    const currencyOf = (id?: string) => (id && accounts.get(id)?.currency) || baseCurrency;
     return {
       ...snapshot,
       repo,
@@ -173,8 +226,22 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
       remove: (path) => write([{ path, text: null }]),
       account: (id) => (id ? accounts.get(id) : undefined),
       category: (id) => (id ? categories.get(id) : undefined),
+      baseCurrency,
+      setBaseCurrency: (code) =>
+        write([{ path: pathFor('settings', 'main'), text: serialize<Settings>({ id: 'main', baseCurrency: code }) }]),
+      rates,
+      balances: accountBalances(snapshot.transactions, snapshot.accounts),
+      toBase,
+      inBase: (txs) =>
+        txs.flatMap((tx) => {
+          const amount = toBase(tx.amount, currencyOf(tx.accountId));
+          if (amount === null) return [];
+          if (tx.type !== 'transfer') return [{ ...tx, amount }];
+          const toAmount = toBase(tx.toAmount ?? tx.amount, currencyOf(tx.toAccountId));
+          return toAmount === null ? [] : [{ ...tx, amount, toAmount }];
+        }),
     };
-  }, [snapshot, repo, syncState, syncNow, write]);
+  }, [snapshot, repo, syncState, syncNow, write, baseCurrency, rates]);
 
   if (!value) return null;
   return <DataContext value={value}>{children}</DataContext>;

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Transaction } from './model';
-import { balanceSeries, cumulativeSpending } from './stats';
+import { accountBalances, balanceSeries, cumulativeSpending } from './stats';
 
 const tx = (date: string, type: Transaction['type'], amount: number, extra: Partial<Transaction> = {}): Transaction => ({
   id: date + type + amount,
@@ -46,4 +46,13 @@ test('budget spending accumulates only matching expenses of that month, up to to
     { day: 2, value: 10 },
     { day: 3, value: 15 },
   ]);
+});
+
+test('balances start from the opening balance, and a transfer between currencies adds what arrived', () => {
+  const txs = [
+    tx('2026-11-06T09:00:00', 'transfer', 1_000_000, { accountId: 'bca', toAccountId: 'dbs', toAmount: 100 }),
+    tx('2026-11-05T12:00:00', 'expense', 10, { accountId: 'dbs' }),
+  ];
+  const balances = accountBalances(txs, [{ id: 'bca', openingBalance: 1_500_000 }, { id: 'dbs', openingBalance: 50 }, { id: 'empty' }]);
+  expect(Object.fromEntries(balances)).toEqual({ bca: 500_000, dbs: 140, empty: 0 });
 });

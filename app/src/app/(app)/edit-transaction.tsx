@@ -9,7 +9,7 @@ import { Keypad, KEYPAD_HEIGHT } from '@/components/keypad';
 import { DateTimeField, Segmented } from '@/components/native';
 import { rounded, typeColor, useColors } from '@/components/theme';
 import { Card, DestructiveButton, Field, Pills, SectionHeader, Separator } from '@/components/ui';
-import { evaluate, hasOperator } from '@/lib/calc';
+import { evaluate, hasOperator, parseAmount } from '@/lib/calc';
 import { useData } from '@/lib/data';
 import { formatMoney, fromLocalIso, toLocalIso, ulid, type Stored, type Transaction, type TxType } from '@/lib/model';
 import { CategoryIcon } from '@/components/category-icon';
@@ -21,6 +21,8 @@ interface Form {
   expression: string;
   accountId?: string;
   toAccountId?: string;
+  /** What arrived, as typed; only for a transfer between currencies. */
+  received: string;
   categoryId?: string;
   title: string;
   note: string;
@@ -46,6 +48,7 @@ export default function EditTransaction() {
     expression: source ? String(source.amount) : '',
     accountId: source?.accountId ?? data.accounts[0]?.id,
     toAccountId: source?.toAccountId ?? data.accounts.find((a) => a.id !== (source?.accountId ?? data.accounts[0]?.id))?.id,
+    received: source?.toAmount ? String(source.toAmount) : '',
     categoryId: source?.categoryId,
     title: source?.title ?? '',
     note: source?.note ?? '',
@@ -61,8 +64,22 @@ export default function EditTransaction() {
   const account = data.account(form.accountId);
   const currency = account?.currency ?? 'IDR';
   const isTransfer = form.type === 'transfer';
+  const toAccount = data.account(form.toAccountId);
+  const crossCurrency = isTransfer && !!toAccount && toAccount.currency !== currency;
+  // Left empty, a transfer between currencies arrives at today's rate.
+  const estimate = crossCurrency ? estimateReceived(amount, currency, toAccount.currency) : null;
+  const toAmount = crossCurrency ? (form.received.trim() ? parseAmount(form.received) : estimate) : undefined;
   const valid =
-    amount > 0 && !!form.accountId && (!isTransfer || (!!form.toAccountId && form.toAccountId !== form.accountId));
+    amount > 0 &&
+    !!form.accountId &&
+    (!isTransfer || (!!form.toAccountId && form.toAccountId !== form.accountId)) &&
+    (!crossCurrency || (!!toAmount && toAmount > 0));
+
+  function estimateReceived(value: number, from: string, to: string): number | null {
+    const inBase = data.toBase(value, from);
+    const perUnit = data.toBase(1, to);
+    return inBase !== null && perUnit ? Math.round((inBase / perUnit) * 100) / 100 : null;
+  }
   const dirty = !saved && JSON.stringify(form) !== JSON.stringify(initial);
 
   usePreventRemove(dirty, ({ repeat }) => {
@@ -107,6 +124,7 @@ export default function EditTransaction() {
       amount,
       accountId: form.accountId!,
       toAccountId: isTransfer ? form.toAccountId : undefined,
+      toAmount: toAmount ?? undefined,
       categoryId: isTransfer ? undefined : form.categoryId,
       title: form.title.trim(),
       note: form.note.trim(),
@@ -204,6 +222,20 @@ export default function EditTransaction() {
               </View>
               <SectionHeader title="To" />
               <Pills items={accountPills} value={form.toAccountId} onChange={(toAccountId) => set({ toAccountId })} />
+              {crossCurrency && (
+                <Animated.View entering={FadeIn} style={styles.section}>
+                  <SectionHeader title={`Received in ${toAccount.currency}`} />
+                  <Card>
+                    <Field
+                      placeholder={estimate !== null ? `≈ ${formatMoney(estimate, toAccount.currency)} at today's rate` : `Amount in ${toAccount.currency}`}
+                      keyboardType="numbers-and-punctuation"
+                      value={form.received}
+                      onChangeText={(received) => set({ received })}
+                      onFocus={() => setKeypad(false)}
+                    />
+                  </Card>
+                </Animated.View>
+              )}
             </Animated.View>
           ) : (
             <Animated.View entering={FadeIn} layout={LinearTransition} style={styles.section}>

@@ -45,3 +45,22 @@ export function press(expression: string, key: string): string {
 }
 
 export const hasOperator = (expression: string) => /\d[+−×÷]\d/.test(expression);
+
+/**
+ * A number typed into a text field, in either style: "21274464.65", "21,274,464.65", or the
+ * Indonesian "21.274.464,65". A lone separator followed by exactly three digits groups thousands
+ * ("1.000"), unless the number starts with 0 ("0,125"); otherwise the last separator is the
+ * decimal point. Null for anything else.
+ */
+export function parseAmount(text: string): number | null {
+  const cleaned = text.replace(/[\s\u00a0]/g, '');
+  if (!/^-?[\d.,]*\d[\d.,]*$/.test(cleaned)) return null;
+  const last = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','));
+  const decimals = last >= 0 ? cleaned.length - last - 1 : 0;
+  const separators = cleaned.match(/[.,]/g) ?? [];
+  const leadingZero = /^-?0$/.test(cleaned.slice(0, last));
+  const isDecimal = decimals > 0 && (decimals !== 3 || new Set(separators).size > 1 || leadingZero);
+  const whole = (isDecimal ? cleaned.slice(0, last) : cleaned).replace(/[.,]/g, '');
+  const n = Number(isDecimal ? `${whole}.${cleaned.slice(last + 1)}` : whole);
+  return Number.isFinite(n) ? n : null;
+}

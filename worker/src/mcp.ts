@@ -3,7 +3,7 @@
 import { createMcpHandler, McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { GitHubError, type GitHub } from "../../app/src/lib/github.ts";
-import type { Stored, Transaction } from "../../app/src/lib/records.ts";
+import { convert, fetchRates, type Rates, type Stored, type Transaction } from "../../app/src/lib/records.ts";
 import { githubFor, WRITE, type Props } from "./connect.ts";
 import type { Env } from "./index.ts";
 import { addTransaction, LedgerError, localNow, readLedger, readMonth, updateTransaction, type Ledger } from "./ledger.ts";
@@ -24,11 +24,16 @@ const MONTH = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM");
 const LOCAL_DATE = z
   .string()
   .describe("Local date and time as YYYY-MM-DDTHH:mm:ss (or YYYY-MM-DD), with no time zone suffix.");
+const TO_AMOUNT = z
+  .number()
+  .positive()
+  .optional()
+  .describe("Transfers between accounts in different currencies, where it is required: how much arrived, in the receiving account's currency.");
 
 export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubFor(props.github.accessToken)) {
   const { repo, timeZone } = props;
   const server = new McpServer({ name: "yaft", version: "1.0.0" }, {
-    instructions: `YAFT is a personal finance tracker. Amounts are plain numbers in the account's currency (IDR has no decimals). Dates are the user's local wall-clock time; the user's time zone is ${timeZone}. Call list_accounts_and_categories before adding a transaction to get valid ids.`,
+    instructions: `YAFT is a personal finance tracker. A transaction's amount is a plain number in its account's currency (IDR has no decimals); totals, budgets, and summaries are in the user's main currency, converted at the day's rate. Investment accounts hold the capital put in, not a market value. Dates are the user's local wall-clock time; the user's time zone is ${timeZone}. Call list_accounts_and_categories before adding a transaction to get valid ids.`,
   });
   const thisMonth = () => localNow(timeZone).slice(0, 7);
 
@@ -42,9 +47,54 @@ export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubF
       run(async () => {
         const ledger = await readLedger(gh, repo);
         return {
-          accounts: ledger.accounts.map((a) => ({ id: a.id, name: a.name, currency: a.currency })),
+          mainCurrency: ledger.baseCurrency,
+          accounts: ledger.accounts.map((a) => ({ id: a.id, name: a.name, type: a.type ?? "cash", currency: a.currency })),
           categories: ledger.categories.map((c) => ({ id: c.id, name: c.name, type: c.type, emoji: c.emoji })),
           budgets: ledger.budgets.map((b) => ({ id: b.id, name: b.name, monthlyLimit: b.amount, categoryIds: b.categoryIds })),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "account_balances",
+    {
+      description:
+        "Each account's current balance in its own currency, and total assets (cash, invested, overall) in the main currency. Reads every transaction, so call it only when balances are asked for.",
+      annotations: { readOnlyHint: true },
+    },
+    () =>
+      run(async () => {
+        const ledger = await readLedger(gh, repo, { since: "0000-00" });
+        const rates = await ratesFor(ledger);
+        const base = ledger.baseCurrency;
+        const balance = new Map(ledger.accounts.map((a) => [a.id, a.openingBalance ?? 0]));
+        const add = (id: string | undefined, v: number) => id && balance.has(id) && balance.set(id, balance.get(id)! + v);
+        for (const t of ledger.transactions) {
+          if (t.type === "income") add(t.accountId, t.amount);
+          else if (t.type === "expense") add(t.accountId, -t.amount);
+          else {
+            add(t.accountId, -t.amount);
+            add(t.toAccountId, t.toAmount ?? t.amount);
+          }
+        }
+        const totals = { cash: 0, invested: 0, total: 0 };
+        const noRate: string[] = [];
+        const accounts = ledger.accounts.map((a) => {
+          const own = balance.get(a.id)!;
+          const value = convert(own, a.currency, base, rates);
+          if (value === null) noRate.push(a.name);
+          else {
+            totals[a.type === "investment" ? "invested" : "cash"] += value;
+            totals.total += value;
+          }
+          return { id: a.id, name: a.name, type: a.type ?? "cash", currency: a.currency, balance: cents(own), inMainCurrency: value === null ? null : cents(value) };
+        });
+        return {
+          mainCurrency: base,
+          ratesDate: rates?.date,
+          accounts,
+          totals: { cash: cents(totals.cash), invested: cents(totals.invested), total: cents(totals.total) },
+          ...(noRate.length > 0 && { leftOutOfTotals: `No exchange rate right now for ${noRate.join(", ")}.` }),
         };
       }),
   );
@@ -86,10 +136,17 @@ export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubF
       run(async () => {
         const m = month ?? thisMonth();
         const ledger = await readMonth(gh, repo, m);
+        const rates = await ratesFor(ledger);
+        const currencyOf = (id: string) => ledger.accounts.find((a) => a.id === id)?.currency ?? ledger.baseCurrency;
+        // Everything in the main currency; a transaction with no rate yet is left out and counted.
+        const inBase = ledger.transactions.flatMap((t) => {
+          const amount = convert(t.amount, currencyOf(t.accountId), ledger.baseCurrency, rates);
+          return amount === null ? [] : [{ ...t, amount }];
+        });
         const spent = new Map<string, number>();
         let income = 0;
         let expense = 0;
-        for (const t of ledger.transactions) {
+        for (const t of inBase) {
           if (t.type === "income") income += t.amount;
           if (t.type !== "expense") continue;
           expense += t.amount;
@@ -99,16 +156,20 @@ export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubF
         const name = (id: string) => ledger.categories.find((c) => c.id === id)?.name ?? "Uncategorized";
         return {
           month: m,
-          income,
-          expense,
-          net: income - expense,
+          currency: ledger.baseCurrency,
+          income: cents(income),
+          expense: cents(expense),
+          net: cents(income - expense),
           count: ledger.transactions.length,
-          spendingByCategory: [...spent].sort((a, b) => b[1] - a[1]).map(([id, total]) => ({ categoryId: id || null, name: name(id), total })),
+          ...(inBase.length < ledger.transactions.length && {
+            leftOut: `${ledger.transactions.length - inBase.length} transactions have no exchange rate right now.`,
+          }),
+          spendingByCategory: [...spent].sort((a, b) => b[1] - a[1]).map(([id, total]) => ({ categoryId: id || null, name: name(id), total: cents(total) })),
           budgets: ledger.budgets.map((b) => {
-            const used = ledger.transactions
+            const used = inBase
               .filter((t) => t.type === "expense" && (b.categoryIds.length === 0 || (!!t.categoryId && b.categoryIds.includes(t.categoryId))))
               .reduce((sum, t) => sum + t.amount, 0);
-            return { name: b.name, limit: b.amount, spent: used, left: b.amount - used };
+            return { name: b.name, limit: b.amount, spent: cents(used), left: cents(b.amount - used) };
           }),
         };
       }),
@@ -126,6 +187,7 @@ export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubF
         amount: z.number().positive().describe("Always positive; type gives the direction."),
         accountId: z.string().describe("Account the money leaves (expense, transfer) or enters (income)."),
         toAccountId: z.string().optional().describe("Transfers only: the account the money enters."),
+        toAmount: TO_AMOUNT,
         categoryId: z.string().optional().describe("Expenses and income only; must match the type."),
         title: z.string().max(200).optional().describe("Short label, such as the merchant."),
         note: z.string().max(2000).optional(),
@@ -150,6 +212,7 @@ export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubF
         amount: z.number().positive().optional(),
         accountId: z.string().optional(),
         toAccountId: z.string().optional(),
+        toAmount: TO_AMOUNT,
         categoryId: z.string().optional(),
         title: z.string().max(200).optional(),
         note: z.string().max(2000).optional(),
@@ -174,6 +237,8 @@ function view(t: Stored<Transaction>, ledger: Ledger) {
     date: t.date,
     type: t.type,
     amount: t.amount,
+    currency: ledger.accounts.find((a) => a.id === t.accountId)?.currency,
+    toAmount: t.toAmount,
     title: t.title,
     note: t.note || undefined,
     category: ledger.categories.find((c) => c.id === t.categoryId)?.name,
@@ -181,6 +246,16 @@ function view(t: Stored<Transaction>, ledger: Ledger) {
     toAccount: account(t.toAccountId),
   };
 }
+
+/** Today's rates for the main currency; null when every account uses it or no rate source answers. */
+async function ratesFor(ledger: Ledger): Promise<Rates | null> {
+  if (ledger.accounts.every((a) => a.currency === ledger.baseCurrency)) return null;
+  // The rates change once a day, so Cloudflare's cache answers most calls without leaving the edge.
+  const cached: typeof fetch = (input, init) => fetch(input, { ...init, cf: { cacheTtl: 6 * 60 * 60, cacheEverything: true } });
+  return fetchRates(ledger.baseCurrency, cached).catch(() => null);
+}
+
+const cents = (n: number) => Math.round(n * 100) / 100;
 
 function withoutPath<T extends { path: string }>({ path: _path, ...rest }: T) {
   return rest;

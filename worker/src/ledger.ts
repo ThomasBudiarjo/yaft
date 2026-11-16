@@ -11,6 +11,7 @@ import {
   type Budget,
   type Category,
   type Kind,
+  type Settings,
   type Stored,
   type Transaction,
   type TxType,
@@ -21,6 +22,8 @@ export class LedgerError extends Error {}
 
 export interface Ledger {
   head: string;
+  /** What totals are reported in: the app's setting, else the first account's currency. */
+  baseCurrency: string;
   accounts: Stored<Account>[];
   categories: Stored<Category>[];
   budgets: Stored<Budget>[];
@@ -35,7 +38,7 @@ export interface TxSelection {
   id?: string;
 }
 
-const RECORD_FILE = /^(accounts|categories|budgets)\/[^/]+\.json$/;
+const RECORD_FILE = /^(accounts|categories|budgets|settings)\/[^/]+\.json$/;
 const TX_FILE = /^tx\/(\d{4})\/(\d{2})\/([^/]+)\.json$/;
 const MAX_TX_FILES = 3000;
 const MAX_ATTEMPTS = 3;
@@ -56,7 +59,8 @@ export async function readLedger(gh: GitHub, repo: Repo, tx: TxSelection = {}): 
     throw new LedgerError("That covers too many transactions to read at once. Ask about a more recent month.");
   }
   const texts = await gh.blobs(repo, wanted.map((f) => f.sha));
-  const ledger: Ledger = { head, accounts: [], categories: [], budgets: [], transactions: [] };
+  const ledger: Ledger = { head, baseCurrency: "", accounts: [], categories: [], budgets: [], transactions: [] };
+  let settings: Settings | null = null;
   for (const f of wanted) {
     const kind = f.path.slice(0, f.path.indexOf("/")) as Kind;
     let value: unknown;
@@ -69,10 +73,12 @@ export async function readLedger(gh: GitHub, repo: Repo, tx: TxSelection = {}): 
     else if (kind === "accounts") push(ledger.accounts, parseRecord(kind, value), f.path);
     else if (kind === "categories") push(ledger.categories, parseRecord(kind, value), f.path);
     else if (kind === "budgets") push(ledger.budgets, parseRecord(kind, value), f.path);
+    else if (kind === "settings" && f.path === pathFor("settings", "main")) settings = parseRecord(kind, value);
   }
   const byOrder = (a: { order: number; name: string }, b: { order: number; name: string }) =>
     a.order - b.order || a.name.localeCompare(b.name);
   ledger.accounts.sort(byOrder);
+  ledger.baseCurrency = settings?.baseCurrency ?? ledger.accounts[0]?.currency ?? "IDR";
   ledger.categories.sort(byOrder);
   ledger.transactions.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   return ledger;
@@ -92,6 +98,8 @@ export interface TxInput {
   amount: number;
   accountId: string;
   toAccountId?: string;
+  /** Transfers between currencies: what arrived, in the receiving account's currency. */
+  toAmount?: number;
   categoryId?: string;
   title?: string;
   note?: string;
@@ -115,6 +123,7 @@ export async function addTransaction(
     amount: input.amount,
     accountId: input.accountId,
     toAccountId: input.toAccountId,
+    toAmount: input.toAmount,
     categoryId: input.categoryId,
     title: input.title?.trim() ?? "",
     note: input.note?.trim() ?? "",
@@ -166,11 +175,20 @@ export async function updateTransaction(
 /** The record as the app will read it, after checking that what it points at exists. */
 function checked(ledger: Ledger, draft: Record<string, unknown>): Transaction {
   const account = (id: unknown) => ledger.accounts.find((a) => a.id === id);
-  if (!account(draft.accountId)) throw new LedgerError(`Unknown account "${draft.accountId}". Call list_accounts_and_categories for the ids.`);
+  const from = account(draft.accountId);
+  if (!from) throw new LedgerError(`Unknown account "${draft.accountId}". Call list_accounts_and_categories for the ids.`);
+  const to = draft.type === "transfer" ? account(draft.toAccountId) : undefined;
+  // Only a transfer between currencies records what arrived; anywhere else it would be stale.
+  if (to?.currency === from.currency || draft.type !== "transfer") draft = { ...draft, toAmount: undefined };
   if (draft.type === "transfer") {
     if (!draft.toAccountId) throw new LedgerError("A transfer needs toAccountId.");
-    if (!account(draft.toAccountId)) throw new LedgerError(`Unknown account "${draft.toAccountId}".`);
+    if (!to) throw new LedgerError(`Unknown account "${draft.toAccountId}".`);
     if (draft.toAccountId === draft.accountId) throw new LedgerError("A transfer needs two different accounts.");
+    if (to.currency !== from.currency && draft.toAmount === undefined) {
+      throw new LedgerError(
+        `${from.name} is in ${from.currency} and ${to.name} is in ${to.currency}. Pass toAmount: how much arrived in ${to.currency}. Ask the user if you don't know it.`,
+      );
+    }
   } else if (draft.categoryId !== undefined) {
     const category = ledger.categories.find((c) => c.id === draft.categoryId);
     if (!category) throw new LedgerError(`Unknown category "${draft.categoryId}". Call list_accounts_and_categories for the ids.`);
@@ -180,7 +198,7 @@ function checked(ledger: Ledger, draft: Record<string, unknown>): Transaction {
     throw new LedgerError(`Invalid date "${draft.date}". Use local time as YYYY-MM-DDTHH:mm:ss, without a time zone.`);
   }
   const tx = parseRecord("tx", draft);
-  if (!tx) throw new LedgerError("The amount must be a number above zero.");
+  if (!tx) throw new LedgerError("amount and toAmount must be numbers above zero.");
   return tx;
 }
 

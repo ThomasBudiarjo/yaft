@@ -15,17 +15,25 @@ Repository layout:
 
 ```
 yaft.json
+settings/main.json              # the main currency
 accounts/<id>.json
 categories/<id>.json
 budgets/<id>.json
 tx/<year>/<month>/<ulid>.json   # month the transaction was created in
 ```
 
+## Currencies
+
+Each account has its own currency, and `settings/main.json` names the main one (More → Main currency). Totals, budgets, and summaries are in the main currency. When an account uses another currency, the phone downloads that day's rates from the free [exchange-api](https://github.com/fawazahmed0/exchange-api), at most every 12 hours, caches them in SQLite, and converts on the device. The rates never go into the repository.
+
+- A transfer between currencies stores `toAmount`, the amount that arrived in the receiving account's currency.
+- An account is `cash` or `investment`. An investment account holds the capital put in, as its `openingBalance` plus transfers in, and has no market value.
+
 ## Agents (MCP)
 
 Add `https://yaft.cc/mcp` as a remote MCP server (a "custom connector" in Claude or ChatGPT). The agent opens a consent page on yaft.cc, the user signs in with the same GitHub App and picks the repository, and the agent gets these tools:
 
-- `list_accounts_and_categories`, `list_transactions`, and `month_summary`, with the `mcp:read` scope.
+- `list_accounts_and_categories`, `list_transactions`, `month_summary`, and `account_balances` (each balance, and cash, invested, and total assets in the main currency), with the `mcp:read` scope. The worker fetches the same rates, through Cloudflare's cache.
 - `add_transaction` and `update_transaction`, only when the user ticks write access (`mcp:write`). No tool deletes anything or writes arbitrary files.
 
 Each change is one commit like the app's, with a message such as `Add "Lunch" 25000 via Claude`, so the phone pulls it within a minute and any change can be reverted in git. Records are checked with the same parser the app uses ([`app/src/lib/records.ts`](app/src/lib/records.ts)), and the app skips files that do not parse.
