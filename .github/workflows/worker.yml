@@ -3,9 +3,9 @@ name: Worker
 on:
   push:
     branches: [main]
-    paths: [worker/**, .github/workflows/worker.yml]
+    paths: [worker/**, app/src/lib/github.ts, app/src/lib/records.ts, .github/workflows/worker.yml]
   pull_request:
-    paths: [worker/**, .github/workflows/worker.yml]
+    paths: [worker/**, app/src/lib/github.ts, app/src/lib/records.ts, .github/workflows/worker.yml]
 
 jobs:
   check:

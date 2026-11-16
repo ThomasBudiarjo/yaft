@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import worker, { type Env } from "./index.ts";
+import worker from "./index.ts";
+import { testCtx as ctx, testEnv } from "./testing.ts";
 
-const env: Env = {
-  GITHUB_CLIENT_ID: "Iv1.client",
-  GITHUB_CLIENT_SECRET: "secret",
-  ALLOWED_RETURN_URLS: "yaft://, exps://dev.example.com",
-  GITHUB_APP_SLUG: "yaft-money",
-};
+const env = testEnv();
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -24,6 +20,7 @@ test("callback forwards code and state to an allowed return URL", async () => {
   const res = await worker.fetch(
     new Request(`https://auth.test/callback?code=abc&state=${encodeURIComponent(s)}`),
     env,
+    ctx,
   );
   assert.equal(res.status, 302);
   const location = new URL(res.headers.get("Location")!.replace("exps://", "https://"));
@@ -38,6 +35,7 @@ test("callback refuses return URLs outside the allow list, including look-alike 
     const res = await worker.fetch(
       new Request(`https://auth.test/callback?code=abc&state=${encodeURIComponent(state(target))}`),
       env,
+      ctx,
     );
     assert.equal(res.status, 400, target);
   }
@@ -55,6 +53,7 @@ test("token exchange sends secret, verifier and the worker's own redirect_uri", 
       body: JSON.stringify({ code: "abc", code_verifier: "v".repeat(43) }),
     }),
     env,
+    ctx,
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { access_token: "ghu_x", refresh_token: "ghr_y", expires_in: 28800 });
@@ -68,13 +67,14 @@ test("GitHub errors returned with HTTP 200 become 400", async () => {
   const res = await worker.fetch(
     new Request("https://auth.test/refresh", { method: "POST", body: JSON.stringify({ refresh_token: "r" }) }),
     env,
+    ctx,
   );
   assert.equal(res.status, 400);
   assert.equal(((await res.json()) as { error: string }).error, "bad_verification_code");
 });
 
 test("home page links the install button to the configured GitHub App", async () => {
-  const res = await worker.fetch(new Request("https://auth.test/"), env);
+  const res = await worker.fetch(new Request("https://auth.test/"), env, ctx);
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.ok(html.includes("https://github.com/apps/yaft-money/installations/new"));

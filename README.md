@@ -3,7 +3,7 @@
 Yet another financial tracker. Every account, category, budget, and transaction is a JSON file in a private GitHub repository that you own. The phone keeps a SQLite copy, commits your changes to the repository, and pulls only the files that changed.
 
 - `app/`: the Expo (SDK 58) app for iOS, which runs in Expo Go.
-- `worker/`: a Cloudflare Worker that exchanges the OAuth code for a token. It holds the client secret and stores nothing.
+- `worker/`: a Cloudflare Worker at `https://yaft.cc`. It exchanges the app's OAuth code for a token, and serves an MCP server so agents can read and add transactions.
 
 ## How sync works
 
@@ -20,6 +20,17 @@ categories/<id>.json
 budgets/<id>.json
 tx/<year>/<month>/<ulid>.json   # month the transaction was created in
 ```
+
+## Agents (MCP)
+
+Add `https://yaft.cc/mcp` as a remote MCP server (a "custom connector" in Claude or ChatGPT). The agent opens a consent page on yaft.cc, the user signs in with the same GitHub App and picks the repository, and the agent gets these tools:
+
+- `list_accounts_and_categories`, `list_transactions`, and `month_summary`, with the `mcp:read` scope.
+- `add_transaction` and `update_transaction`, only when the user ticks write access (`mcp:write`). No tool deletes anything or writes arbitrary files.
+
+Each change is one commit like the app's, with a message such as `Add "Lunch" 25000 via Claude`, so the phone pulls it within a minute and any change can be reverted in git. Records are checked with the same parser the app uses ([`app/src/lib/records.ts`](app/src/lib/records.ts)), and the app skips files that do not parse.
+
+Unlike the app's sign-in, this keeps state. yaft.cc is the OAuth server for agents ([`@cloudflare/workers-oauth-provider`](https://github.com/cloudflare/workers-oauth-provider)) and keeps each grant in the `OAUTH_KV` namespace. Tokens are stored as hashes, and the user's GitHub token is encrypted with a key that only that grant's tokens can unwrap, so the KV data alone cannot recover it. Agents never see the GitHub token. Their access token expires five minutes before the GitHub token it carries, and refreshing it is the only time the worker refreshes the GitHub token. If the user revokes the app on GitHub, the next refresh ends the grant.
 
 ## Setup
 
@@ -46,7 +57,7 @@ npx wrangler secret put GITHUB_CLIENT_SECRET
 npx wrangler deploy
 ```
 
-The worker is named `yaft` and serves `https://yaft.cc`: the landing page at `/`, plus `/callback`, `/token`, and `/refresh`. Set `GITHUB_APP_SLUG` in `wrangler.jsonc` to the app's slug so the install button points at it.
+The worker is named `yaft` and serves `https://yaft.cc`: the landing page at `/`, `/callback`, `/token`, and `/refresh` for the app, and `/mcp` with `/authorize` and `/oauth/*` for agents. The first deploy creates the `OAUTH_KV` namespace, so the Cloudflare API token needs Workers KV Storage edit permission. Set `GITHUB_APP_SLUG` in `wrangler.jsonc` to the app's slug so the install button points at it.
 
 `ALLOWED_RETURN_URLS` in `wrangler.jsonc` lists where `/callback` may send the code. Add your Expo Go return URL during development (see below), for example `yaft://,exps://expo.example.com`.
 

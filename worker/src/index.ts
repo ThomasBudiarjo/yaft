@@ -1,4 +1,7 @@
+import { OAuthProvider, type OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { authorize, chooseRepo, exchangeCallback, finishSignIn, githubToken, READ, WRITE } from "./connect.ts";
 import { LANDING_HTML } from "./landing.ts";
+import { mcpHandler } from "./mcp.ts";
 
 export interface Env {
   GITHUB_CLIENT_ID: string;
@@ -7,27 +10,25 @@ export interface Env {
   ALLOWED_RETURN_URLS: string;
   /** github.com/apps/<slug>, for the install button on the home page. */
   GITHUB_APP_SLUG: string;
+  /** Agent grants and tokens, managed by the OAuth provider. Tokens are hashed and props encrypted. */
+  OAUTH_KV: KVNamespace;
+  /** Set by the OAuth provider on every request. */
+  OAUTH_PROVIDER: OAuthHelpers;
 }
 
-const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
+export const ORIGIN = "https://yaft.cc";
 
-// Fields the app needs. Everything else GitHub returns is dropped.
-const TOKEN_FIELDS = [
-  "access_token",
-  "token_type",
-  "scope",
-  "expires_in",
-  "refresh_token",
-  "refresh_token_expires_in",
-  "error",
-  "error_description",
-] as const;
-
-export default {
+/** The app's endpoints and the agent sign-in pages; everything except /mcp and the OAuth protocol routes. */
+const site = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/") return landing(env);
-    if (request.method === "GET" && url.pathname === "/callback") return callback(url, env);
+    if (url.pathname === "/authorize" && (request.method === "GET" || request.method === "POST")) return authorize(request, env, url);
+    if (request.method === "POST" && url.pathname === "/authorize/repo") return chooseRepo(request, env);
+    if (request.method === "GET" && url.pathname === "/callback") {
+      // The app's state is `<nonce>.<base64url(returnUrl)>`; an agent sign-in's is one base64url handle.
+      return (url.searchParams.get("state") ?? "").includes(".") ? callback(url, env) : finishSignIn(request, env, url);
+    }
     if (request.method === "POST" && url.pathname === "/token") {
       const body = await readJson(request);
       if (typeof body?.code !== "string" || typeof body?.code_verifier !== "string") {
@@ -50,6 +51,21 @@ export default {
   },
 };
 
+export default new OAuthProvider<Env>({
+  apiRoute: "/mcp",
+  apiHandler: mcpHandler,
+  defaultHandler: site,
+  authorizeEndpoint: "/authorize",
+  tokenEndpoint: "/oauth/token",
+  // Most agents still register themselves (RFC 7591); newer ones send a Client ID Metadata Document.
+  clientRegistrationEndpoint: "/oauth/register",
+  clientIdMetadataDocumentEnabled: true,
+  scopesSupported: [READ, WRITE, "offline_access"],
+  requiredScopes: [READ],
+  resourceMetadata: { resource: `${ORIGIN}/mcp`, resource_name: "YAFT" },
+  tokenExchangeCallback: exchangeCallback,
+});
+
 function landing(env: Env): Response {
   return new Response(LANDING_HTML.replaceAll("{{APP_SLUG}}", encodeURIComponent(env.GITHUB_APP_SLUG)), {
     headers: {
@@ -63,7 +79,7 @@ function landing(env: Env): Response {
 }
 
 /**
- * GitHub redirects here after the user authorizes. The app put its own return URL in
+ * GitHub redirects here after the user authorizes in the app. The app put its own return URL in
  * `state` as `<nonce>.<base64url(returnUrl)>`; we bounce the code back to that URL so the
  * GitHub App only needs one fixed callback URL, even for Expo Go's changing dev URLs.
  */
@@ -86,22 +102,8 @@ function callback(url: URL, env: Env): Response {
 }
 
 async function exchange(env: Env, params: Record<string, string>): Promise<Response> {
-  const upstream = await fetch(GITHUB_TOKEN_URL, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: env.GITHUB_CLIENT_ID,
-      client_secret: env.GITHUB_CLIENT_SECRET,
-      ...params,
-    }),
-  });
-  const data = (await upstream.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!data) return json({ error: "upstream_error" }, 502);
-  const result: Record<string, unknown> = {};
-  for (const field of TOKEN_FIELDS) if (data[field] !== undefined) result[field] = data[field];
-  // GitHub answers errors with HTTP 200 and an `error` field.
-  const status = !upstream.ok ? upstream.status : result.error ? 400 : 200;
-  return json(result, status);
+  const { status, body } = await githubToken(env, params);
+  return json(body, status);
 }
 
 function decodeReturnUrl(state: string): string | null {

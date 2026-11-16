@@ -1,12 +1,19 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // One worker for yaft.cc: the home page at / and the OAuth endpoints (/callback, /token, /refresh).
+  // One worker for yaft.cc: the home page at /, the app's OAuth endpoints (/callback, /token,
+  // /refresh), and the MCP server for agents at /mcp with its own OAuth server (/authorize, /oauth/*).
   "name": "yaft",
   "account_id": "991d2edd07348de19465a4b5c06b73dc",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
+  // Agents may identify themselves with a Client ID Metadata Document URL, which the OAuth
+  // provider fetches; this keeps that fetch off private and internal addresses.
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "routes": [{ "pattern": "yaft.cc", "custom_domain": true }],
+  // Agent grants and tokens. Tokens are stored as hashes and each grant's GitHub token is
+  // encrypted with a key only that grant's tokens unwrap. Created on first deploy.
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
   "vars": {
     // The app's own scheme, plus Expo Go through the named dev tunnel (app/scripts/tunnel.sh).
     "ALLOWED_RETURN_URLS": "yaft://,exps://expo.yaft.cc,exp://expo.yaft.cc",
