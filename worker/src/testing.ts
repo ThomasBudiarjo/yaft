@@ -66,7 +66,10 @@ export function fakeGitHub(files: Record<string, unknown> = {}): FakeGitHub {
       const body = typeof init?.body === "string" ? init.body : init?.body ? String(init.body) : "";
       if (url.href === "https://github.com/login/oauth/access_token") return tokenEndpoint(new URLSearchParams(body));
       if (url.host !== "api.github.com") throw new Error(`unexpected fetch ${url}`);
-      gh.tokensSeen.push(String(new Headers(init?.headers).get("Authorization")).replace("Bearer ", ""));
+      const headers = new Headers(init?.headers);
+      // Like GitHub, which answers 403 to API requests without one.
+      if (!headers.get("User-Agent")) return Response.json({ message: "Missing User-Agent" }, { status: 403 });
+      gh.tokensSeen.push(String(headers.get("Authorization")).replace("Bearer ", ""));
       return api(url, init?.method ?? "GET", body);
     },
   };

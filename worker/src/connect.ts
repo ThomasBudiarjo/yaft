@@ -51,6 +51,13 @@ interface Picking extends Omit<Upstream, "verifier"> {
 
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
 
+/** GitHub's API refuses requests without a User-Agent, which fetch in Workers does not send. */
+export function githubFor(accessToken: string): GitHub {
+  return createGitHub(async () => accessToken, (input, init) =>
+    fetch(input, { ...init, headers: { "User-Agent": "yaft.cc", ...init?.headers } }),
+  );
+}
+
 // Fields the app needs. Everything else GitHub returns is dropped.
 const TOKEN_FIELDS = [
   "access_token",
@@ -139,7 +146,7 @@ export async function finishSignIn(request: Request, env: Env, url: URL): Promis
       return page(messagePage("GitHub sign-in failed", String(token.body.error_description ?? token.body.error ?? "Try connecting again.")), headers, { status: 502 });
     }
     const github = tokensFrom(token.body);
-    const gh = createGitHub(async () => github.accessToken);
+    const gh = githubFor(github.accessToken);
     const [user, repos] = await Promise.all([gh.rest<{ id: number; login: string }>("/user"), installedRepos(gh)]);
     if (repos.length === 0) {
       const install = `https://github.com/apps/${encodeURIComponent(env.GITHUB_APP_SLUG)}/installations/new`;

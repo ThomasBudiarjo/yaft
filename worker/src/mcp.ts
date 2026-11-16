@@ -2,9 +2,9 @@
 // grant's props (the GitHub token and the picked repository) arrive decrypted in `ctx.props`.
 import { createMcpHandler, McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import { createGitHub, GitHubError, type GitHub } from "../../app/src/lib/github.ts";
+import { GitHubError, type GitHub } from "../../app/src/lib/github.ts";
 import type { Stored, Transaction } from "../../app/src/lib/records.ts";
-import { WRITE, type Props } from "./connect.ts";
+import { githubFor, WRITE, type Props } from "./connect.ts";
 import type { Env } from "./index.ts";
 import { addTransaction, LedgerError, localNow, readLedger, readMonth, updateTransaction, type Ledger } from "./ledger.ts";
 
@@ -25,7 +25,7 @@ const LOCAL_DATE = z
   .string()
   .describe("Local date and time as YYYY-MM-DDTHH:mm:ss (or YYYY-MM-DD), with no time zone suffix.");
 
-export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = createGitHub(async () => props.github.accessToken)) {
+export function yaftServer(props: Props, canWrite: boolean, gh: GitHub = githubFor(props.github.accessToken)) {
   const { repo, timeZone } = props;
   const server = new McpServer({ name: "yaft", version: "1.0.0" }, {
     instructions: `YAFT is a personal finance tracker. Amounts are plain numbers in the account's currency (IDR has no decimals). Dates are the user's local wall-clock time; the user's time zone is ${timeZone}. Call list_accounts_and_categories before adding a transaction to get valid ids.`,
