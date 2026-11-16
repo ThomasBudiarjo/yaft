@@ -16,7 +16,7 @@ export interface Env {
   OAUTH_PROVIDER: OAuthHelpers;
 }
 
-export const ORIGIN = "https://yaft.cc";
+const ORIGIN = "https://yaft.cc";
 
 /** The app's endpoints and the agent sign-in pages; everything except /mcp and the OAuth protocol routes. */
 const site = {

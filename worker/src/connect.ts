@@ -257,9 +257,17 @@ function base64url(bytes: Uint8Array): string {
 
 const TIME_ZONE_SCRIPT = `document.getElementById("tz").value = Intl.DateTimeFormat().resolvedOptions().timeZone;`;
 
+// Each form's handle or state works once. A second click while the first is still on its way to
+// GitHub would cancel that navigation and land on "not started in this browser", so a form
+// submits only once.
+const SUBMIT_ONCE_SCRIPT = `for (const form of document.forms) form.addEventListener("submit", (event) => {
+  if (form.classList.contains("sent")) event.preventDefault();
+  form.classList.add("sent");
+});`;
+
 function page(body: string, headers: Headers, { status = 200, script = "" } = {}): Response {
   const nonce = base64url(crypto.getRandomValues(new Uint8Array(16)));
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>YAFT</title><style>${STYLE}</style></head><body><main>${body}</main>${script ? `<script nonce="${nonce}">${script}</script>` : ""}</body></html>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>YAFT</title><style>${STYLE}</style></head><body><main>${body}</main><script nonce="${nonce}">${SUBMIT_ONCE_SCRIPT}\n${script}</script></body></html>`;
   const out = new Headers(headers);
   out.set("Content-Type", "text/html; charset=utf-8");
   out.set("Cache-Control", "no-store");
@@ -332,4 +340,5 @@ p{margin:0 0 16px;overflow-wrap:anywhere}
 .always{flex:none;width:14px;height:14px;margin-top:5px;color:var(--tint)}
 .buttons{display:flex;gap:12px;margin-top:24px}
 button,.button{flex:1;height:50px;border:0;border-radius:25px;font:inherit;font-weight:700;cursor:pointer;background:transparent;border:1.5px solid var(--muted);color:var(--text);display:grid;place-items:center;text-decoration:none}
-.primary{background:var(--tint);border-color:var(--tint);color:#fff}`;
+.primary{background:var(--tint);border-color:var(--tint);color:#fff}
+.sent button{opacity:.55;cursor:progress}`;
