@@ -6,6 +6,7 @@ import { createGitHub, GitHubError, type Repo } from './github';
 import {
   DEFAULT_ACCOUNTS,
   DEFAULT_CATEGORIES,
+  parseRecord,
   pathFor,
   serialize,
   type Account,
@@ -71,16 +72,18 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
     const pending = await db.getFirstAsync<{ n: number }>(`SELECT COUNT(*) AS n FROM pending`);
     const next: Snapshot = { accounts: [], categories: [], budgets: [], transactions: [], pending: pending?.n ?? 0 };
     for (const row of rows) {
-      let record: Record<string, unknown>;
+      let value: unknown;
       try {
-        record = { ...JSON.parse(row.data), path: row.path };
+        value = JSON.parse(row.data);
       } catch {
         continue; // A hand-edited file that is not valid JSON; skip it rather than break the app.
       }
-      if (row.kind === 'tx') next.transactions.push(record as unknown as Stored<Transaction>);
-      else if (row.kind === 'accounts') next.accounts.push(record as unknown as Stored<Account>);
-      else if (row.kind === 'categories') next.categories.push(record as unknown as Stored<Category>);
-      else if (row.kind === 'budgets') next.budgets.push(record as unknown as Stored<Budget>);
+      // Files from agents and hand edits can be valid JSON of the wrong shape; skip those too.
+      const { kind, path } = row;
+      if (kind === 'tx') push(next.transactions, parseRecord(kind, value), path);
+      else if (kind === 'accounts') push(next.accounts, parseRecord(kind, value), path);
+      else if (kind === 'categories') push(next.categories, parseRecord(kind, value), path);
+      else if (kind === 'budgets') push(next.budgets, parseRecord(kind, value), path);
     }
     next.accounts.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
     next.categories.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
@@ -175,6 +178,10 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
 
   if (!value) return null;
   return <DataContext value={value}>{children}</DataContext>;
+}
+
+function push<T>(list: Stored<T>[], record: T | null, path: string) {
+  if (record) list.push({ ...record, path });
 }
 
 export function useData(): DataValue {

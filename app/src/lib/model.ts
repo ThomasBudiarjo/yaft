@@ -1,93 +1,10 @@
 import { getRandomBytes } from 'expo-crypto';
+import { ulidFrom, type Account, type Category, type Transaction } from './records';
 
-export type TxType = 'expense' | 'income' | 'transfer';
+export * from './records';
 
-export interface Account {
-  id: string;
-  name: string;
-  currency: string;
-  color: string;
-  order: number;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  /**
-   * Key of a hand-drawn icon; `null` when the user chose `emoji` instead. Absent in categories
-   * saved before icons existed.
-   */
-  icon?: string | null;
-  emoji: string;
-  color: string;
-  type: 'expense' | 'income';
-  order: number;
-}
-
-export interface Transaction {
-  id: string;
-  type: TxType;
-  /** Always positive; `type` gives the direction. */
-  amount: number;
-  accountId: string;
-  /** Transfers only. */
-  toAccountId?: string;
-  /** Expenses and income only. */
-  categoryId?: string;
-  title: string;
-  note: string;
-  /** Local wall-clock time, `YYYY-MM-DDTHH:mm:ss`, so a day stays the same day in every time zone. */
-  date: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Budget {
-  id: string;
-  name: string;
-  /** Monthly limit. */
-  amount: number;
-  /** Empty means every expense category. */
-  categoryIds: string[];
-  color: string;
-}
-
-export type Kind = 'accounts' | 'categories' | 'budgets' | 'tx';
-
-/** A record plus the repository path it lives at. */
-export type Stored<T> = T & { path: string };
-
-const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-/** Sortable unique id: 48 bits of milliseconds, then 80 random bits, in Crockford base32. */
-export function ulid(now = Date.now(), random: Uint8Array = getRandomBytes(10)): string {
-  let time = '';
-  for (let i = 0, t = now; i < 10; i++, t = Math.floor(t / 32)) time = B32[t % 32] + time;
-  let out = '';
-  let value = 0;
-  let bits = 0;
-  for (const byte of random) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      out += B32[(value >> (bits - 5)) & 31];
-      bits -= 5;
-    }
-    value &= (1 << bits) - 1;
-  }
-  return time + out;
-}
-
-/** Transactions are filed by creation month, so editing the date never moves the file. */
-export function pathFor(kind: Kind, id: string, now = new Date()): string {
-  if (kind !== 'tx') return `${kind}/${id}.json`;
-  return `tx/${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${id}.json`;
-}
-
-export function serialize<T extends object>(record: Stored<T> | T): string {
-  const { path: _path, ...rest } = record as Stored<T>;
-  return JSON.stringify(rest, null, 2) + '\n';
-}
+/** Sortable unique id from the current time and fresh random bytes. */
+export const ulid = (now = Date.now(), random: Uint8Array = getRandomBytes(10)) => ulidFrom(now, random);
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
