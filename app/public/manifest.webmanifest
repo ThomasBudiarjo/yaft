@@ -1,0 +1,15 @@
+{
+  "id": "/app/",
+  "name": "YAFT — Yet Another Financial Tracker",
+  "short_name": "YAFT",
+  "description": "Track expenses, accounts, and budgets in your own GitHub repository.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#EEF2F7",
+  "theme_color": "#2F6FED",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

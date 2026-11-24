@@ -1,6 +1,7 @@
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { ActivityIndicator, AppState, Platform, Text, View } from 'react-native';
+import { useColors } from '@/components/theme';
 import { useAuth } from './auth';
 import { createGitHub, GitHubError, type Repo } from './github';
 import {
@@ -23,6 +24,7 @@ import {
 import { accountBalances } from './stats';
 import { createStore, SCHEMA } from './store';
 import { sync } from './sync';
+import { webGitHub } from './web-ledger';
 
 export interface Snapshot {
   accounts: Stored<Account>[];
@@ -66,20 +68,54 @@ const PUSH_DELAY_MS = 1500;
 const POLL_MS = 60_000;
 const RATES_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+let browserLedger: Promise<void> | undefined;
+
+function BrowserLedger({ children }: { children: ReactNode }) {
+  const c = useColors();
+  const supported = typeof window !== 'undefined' && window.crossOriginIsolated && !!navigator.storage?.getDirectory && !!navigator.locks;
+  const [status, setStatus] = useState<'opening' | 'ready' | 'unavailable'>('opening');
+  useEffect(() => {
+    if (!supported) return;
+    // Expo SQLite's worker keeps exclusive OPFS handles until the document closes, even across repo switches.
+    browserLedger ??= new Promise<void>((resolve, reject) => {
+      void navigator.locks.request('yaft-sqlite', () => {
+        resolve();
+        return new Promise<never>(() => {});
+      }).catch(reject);
+    });
+    let live = true;
+    void browserLedger.then(() => live && setStatus('ready'), () => live && setStatus('unavailable'));
+    return () => { live = false; };
+  }, [supported]);
+
+  if (status === 'ready') return children;
+  const opening = supported && status === 'opening';
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, padding: 24 }}>
+      {opening && <ActivityIndicator color={c.tint} />}
+      <Text style={{ color: c.text, textAlign: 'center' }}>
+        {opening ? 'Opening the ledger… If YAFT is already open in another tab, close that tab to continue.'
+          : 'Local storage is unavailable. Open YAFT in a current browser over HTTPS.'}
+      </Text>
+    </View>
+  );
+}
+
 /** One database per repository, so switching repositories never mixes their records. */
 export function DataProvider({ repo, children }: { repo: Repo; children: ReactNode }) {
-  return (
+  const ledger = (
     <SQLiteProvider databaseName={`${repo.owner}__${repo.name}.db`} onInit={(db) => db.execAsync(SCHEMA)}>
       <DataState repo={repo}>{children}</DataState>
     </SQLiteProvider>
   );
+  return Platform.OS === 'web' ? <BrowserLedger>{ledger}</BrowserLedger> : ledger;
 }
 
 function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
   const db = useSQLiteContext();
-  const { getToken, signOut } = useAuth();
+  const { getToken, expireSession } = useAuth();
   const store = useMemo(() => createStore(db), [db]);
-  const gh = useMemo(() => createGitHub(getToken), [getToken]);
+  const gh = useMemo(() => Platform.OS === 'web' ? webGitHub : createGitHub(getToken), [getToken]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [syncState, setSyncState] = useState<SyncState>({ status: 'idle' });
 
@@ -144,14 +180,14 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
         } while (again.current);
         setSyncState({ status: 'idle', lastSyncedAt: Date.now() });
       } catch (error) {
-        if (error instanceof GitHubError && error.status === 401) signOut();
+        if (error instanceof GitHubError && error.status === 401) expireSession();
         setSyncState((s) => ({ ...s, status: 'error', error: error instanceof Error ? error.message : String(error) }));
       } finally {
         running.current = null;
       }
     })();
     return running.current;
-  }, [db, gh, repo, store, reload, signOut]);
+  }, [db, gh, repo, store, reload, expireSession]);
 
   const pushTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const write = useCallback(
@@ -174,10 +210,12 @@ function DataState({ repo, children }: { repo: Repo; children: ReactNode }) {
         timer = setInterval(() => void syncNow(), POLL_MS);
       }
     });
+    if (Platform.OS === 'web') window.addEventListener('online', syncNow);
     return () => {
       clearInterval(timer);
       clearTimeout(pushTimer.current);
       sub.remove();
+      if (Platform.OS === 'web') window.removeEventListener('online', syncNow);
     };
   }, [reload, syncNow]);
 

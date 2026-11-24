@@ -1,4 +1,5 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Toolbar } from '@/components/toolbar';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BudgetCard } from '@/components/budget-card';
 import { Donut, LineChart } from '@/components/charts';
@@ -79,13 +80,13 @@ export default function BudgetDetail() {
         ))}
       </ScrollView>
       <Stack.Screen options={{ title: budget.name }} />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
+      <Toolbar placement="right">
+        <Toolbar.Button
           icon="pencil"
           accessibilityLabel="Edit budget"
           onPress={() => router.push({ pathname: '/edit-budget', params: { path: budget.path } })}
         />
-      </Stack.Toolbar>
+      </Toolbar>
     </>
   );
 }

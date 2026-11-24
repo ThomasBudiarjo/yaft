@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { evaluate, hasOperator, OPS, press, type Op } from '@/lib/calc';
@@ -16,6 +16,7 @@ const ROWS = [
   ['1', '2', '3', '−'],
   ['.', '0', '⌫', '+'],
 ];
+const KEY_ALIASES: Record<string, string> = { '*': '×', '/': '÷', '-': '−', ',': '.', Backspace: '⌫' };
 
 /** Number pad with arithmetic, so "45000+12500" can be typed straight from a receipt. */
 export function Keypad({
@@ -36,6 +37,26 @@ export function Keypad({
     onChange(press(expression, key));
   };
   const pending = hasOperator(expression);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    function onKey(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const key = KEY_ALIASES[event.key] ?? event.key;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onDone();
+      } else if (event.key === '=' && pending) {
+        event.preventDefault();
+        onChange(String(evaluate(expression) ?? ''));
+      } else if (/^[0-9.+−×÷⌫]$/.test(key)) {
+        event.preventDefault();
+        onChange(press(expression, key));
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expression, onChange, onDone, pending]);
   // Swiping down on the pad hides it, like dismissing a keyboard. Capture so it wins over the keys.
   // Created once; onDone only hides the pad, so the first render's callback stays correct.
   const [swipe] = useState(() =>
@@ -60,6 +81,7 @@ export function Keypad({
             return (
               <Pressable
                 key={key}
+                accessibilityRole="button"
                 accessibilityLabel={key === '⌫' ? 'Delete' : key}
                 onPress={() => tap(key)}
                 onLongPress={key === '⌫' ? () => onChange('') : undefined}
@@ -80,15 +102,17 @@ export function Keypad({
       ))}
       <View style={styles.row}>
         <Pressable
+          accessibilityRole="button"
           accessibilityLabel="Hide keypad"
           onPress={onDone}
           style={({ pressed }) => [styles.key, { backgroundColor: c.key }, pressed && styles.pressed]}>
           <SymbolView name="chevron.down" size={20} weight="semibold" tintColor={c.secondary} fallback={<Text style={[styles.label, { color: c.secondary }]}>⌄</Text>} />
         </Pressable>
-        <Pressable onPress={() => tap('000')} style={({ pressed }) => [styles.key, { backgroundColor: c.key }, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" onPress={() => tap('000')} style={({ pressed }) => [styles.key, { backgroundColor: c.key }, pressed && styles.pressed]}>
           <Text style={[styles.label, { color: c.text }]}>000</Text>
         </Pressable>
         <Pressable
+          accessibilityRole="button"
           onPress={() => {
             if (pending) {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

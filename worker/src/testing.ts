@@ -1,15 +1,40 @@
 // Test doubles: Workers KV in memory, and a GitHub that keeps one repository's files and commits.
 import type { Env } from "./index.ts";
+import { WebSession } from "./web-session.ts";
 
 export function testEnv(): Env {
-  return {
+  const env: Env = {
     GITHUB_CLIENT_ID: "Iv1.client",
     GITHUB_CLIENT_SECRET: "secret",
-    ALLOWED_RETURN_URLS: "yaft://, exps://dev.example.com",
+    ALLOWED_RETURN_URLS: "yaft://, exps://dev.example.com, https://yaft.cc/app/auth",
     GITHUB_APP_SLUG: "yaft-money",
+    ASSETS: { fetch: async (input: RequestInfo | URL) => new Response(new URL((input as Request).url).pathname) },
+    WEB_SESSIONS: undefined as unknown as Env["WEB_SESSIONS"],
     OAUTH_KV: memoryKv(),
     OAUTH_PROVIDER: undefined as unknown as Env["OAUTH_PROVIDER"],
   };
+  const sessions = new Map<string, WebSession>();
+  env.WEB_SESSIONS = {
+    newUniqueId: () => Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join(""),
+    idFromString: (id: string) => id,
+    get(id: string) {
+      if (!sessions.has(id)) {
+        const values = new Map<string, unknown>();
+        const storage = {
+          get: async (key: string) => values.get(key),
+          put: async (key: string, value: unknown) => { values.set(key, value); },
+          delete: async (key: string) => values.delete(key),
+          deleteAll: async () => values.clear(),
+          setAlarm: async () => {},
+          deleteAlarm: async () => {},
+          transaction: async (run: (txn: unknown) => Promise<unknown>) => run(storage),
+        };
+        sessions.set(id, new WebSession({ storage } as unknown as DurableObjectState, env));
+      }
+      return sessions.get(id);
+    },
+  } as unknown as Env["WEB_SESSIONS"];
+  return env;
 }
 
 export const testCtx = { waitUntil() {}, passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
@@ -78,7 +103,7 @@ export function fakeGitHub(files: Record<string, unknown> = {}): FakeGitHub {
     },
   };
   let issued = 0;
-  const head = () => `head${gh.commits.length}`;
+  const head = () => (gh.commits.length + 1).toString(16).padStart(40, "0");
   const sha = (path: string) => {
     let h = 2166136261;
     for (const ch of `${path}\n${gh.files.get(path)}`) h = Math.imul(h ^ ch.codePointAt(0)!, 16777619) >>> 0;
@@ -108,8 +133,9 @@ export function fakeGitHub(files: Record<string, unknown> = {}): FakeGitHub {
     if (path === "/user") return Response.json({ id: 42, login: "thomas" });
     if (path === "/user/installations") return Response.json({ installations: [{ id: 7 }] });
     if (path === "/user/installations/7/repositories") {
-      return Response.json({ repositories: [{ name: "money", owner: { login: "thomas" }, default_branch: "main" }] });
+      return Response.json({ repositories: [{ id: 1, name: "money", private: true, owner: { login: "thomas" }, default_branch: "main" }] });
     }
+    if (path === "/repos/thomas/money") return Response.json({ id: 1, private: true });
     if (path === "/repos/thomas/money/git/ref/heads/main") return Response.json({ object: { sha: head() } });
     if (path === `/repos/thomas/money/git/trees/${head()}`) {
       return Response.json({ truncated: false, tree: [...gh.files.keys()].map((p) => ({ path: p, type: "blob", sha: sha(p) })) });

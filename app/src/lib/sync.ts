@@ -1,4 +1,4 @@
-import { StaleHeadError, type FileChange, type GitHub, type Repo } from './github';
+import { MANIFEST_PATH, StaleHeadError, type FileChange, type GitHub, type Repo } from './github';
 
 export interface PendingChange extends FileChange {
   /** Bumped on every local edit of the path, so a push only clears the version it sent. */
@@ -24,10 +24,10 @@ export interface SyncResult {
 
 const DATA_FILE = /^(accounts|categories|budgets|tx|settings)\/.+\.json$/;
 const MAX_ATTEMPTS = 3;
-export const MANIFEST_PATH = 'yaft.json';
+type LedgerGitHub = Omit<GitHub, 'rest'>;
 
 /** Pull what changed on the remote branch, then push local changes as a single commit. */
-export async function sync(gh: GitHub, repo: Repo, store: SyncStore): Promise<SyncResult> {
+export async function sync(gh: LedgerGitHub, repo: Repo, store: SyncStore): Promise<SyncResult> {
   let pulled = false;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     pulled = (await pull(gh, repo, store)) || pulled;
@@ -53,7 +53,7 @@ export async function sync(gh: GitHub, repo: Repo, store: SyncStore): Promise<Sy
   throw new Error('Sync gave up: the branch kept moving while pushing.');
 }
 
-async function pull(gh: GitHub, repo: Repo, store: SyncStore): Promise<boolean> {
+async function pull(gh: LedgerGitHub, repo: Repo, store: SyncStore): Promise<boolean> {
   const [remote, local] = await Promise.all([gh.head(repo), store.head()]);
   if (remote === local) return false;
   if (!remote) {

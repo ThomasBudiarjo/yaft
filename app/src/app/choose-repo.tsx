@@ -1,15 +1,15 @@
-import { SymbolView } from 'expo-symbols';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SymbolView } from '@/components/symbol';
 import { rounded, useColors } from '@/components/theme';
 import { Card, Separator } from '@/components/ui';
 import { installUrl, useAuth } from '@/lib/auth';
-import { createGitHub } from '@/lib/github';
+import { createGitHub, GitHubError, type Repo } from '@/lib/github';
+import { webLedger } from '@/lib/web-ledger';
 
 interface RepoInfo {
-  id: number;
   name: string;
   full_name: string;
   private: boolean;
@@ -19,11 +19,17 @@ interface RepoInfo {
 
 export default function ChooseRepo() {
   const c = useColors();
-  const { getToken, setRepo, signOut } = useAuth();
+  const { getToken, setRepo, signOut, expireSession } = useAuth();
   const [repos, setRepos] = useState<RepoInfo[] | null>(null);
   const [error, setError] = useState<string>();
+  const [selecting, setSelecting] = useState(false);
 
   const fetchRepos = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      return (await webLedger<Repo[]>({ op: 'repos' })).map((r): RepoInfo => ({
+        name: r.name, full_name: `${r.owner}/${r.name}`, private: true, default_branch: r.branch, owner: { login: r.owner },
+      }));
+    }
     const gh = createGitHub(getToken);
     const { installations } = await gh.rest<{ installations: { id: number }[] }>('/user/installations');
     const lists = await Promise.all(
@@ -40,18 +46,37 @@ export default function ChooseRepo() {
           setError(undefined);
         },
         (e: unknown) => {
+          if (Platform.OS === 'web' && e instanceof GitHubError && e.status === 401) expireSession();
           setRepos([]);
           setError(e instanceof Error ? e.message : String(e));
         },
       ),
-    [fetchRepos],
+    [fetchRepos, expireSession],
   );
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  async function select(r: RepoInfo) {
+    const repo = { owner: r.owner.login, name: r.name, branch: r.default_branch };
+    if (Platform.OS !== 'web') return setRepo(repo);
+    setSelecting(true);
+    try {
+      setRepo(await webLedger<Repo>({ op: 'select', repo }));
+    } catch (e) {
+      if (e instanceof GitHubError && e.status === 401) expireSession();
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSelecting(false);
+    }
+  }
+
   async function open(url: string) {
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     await WebBrowser.openBrowserAsync(url);
     setRepos(null);
     await load();
@@ -71,14 +96,16 @@ export default function ChooseRepo() {
         ) : repos.length > 0 ? (
           <Card>
             {repos.map((r, i) => (
-              <View key={r.id}>
+              <View key={r.full_name}>
                 {i > 0 && <Separator />}
                 <Pressable
-                  onPress={() => setRepo({ owner: r.owner.login, name: r.name, branch: r.default_branch })}
+                  accessibilityRole="button"
+                  disabled={selecting}
+                  onPress={() => void select(r)}
                   style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.fill }]}>
-                  <SymbolView name={r.private ? 'lock.fill' : 'book.closed'} size={18} tintColor={c.secondary} />
+                  <SymbolView name={r.private ? 'lock.fill' : 'book.closed'} material={r.private ? 'lock' : 'book'} size={18} tintColor={c.secondary} />
                   <Text style={[styles.repo, { color: c.text }]}>{r.full_name}</Text>
-                  <SymbolView name="chevron.right" size={14} tintColor={c.secondary} />
+                  <SymbolView name="chevron.right" material="chevron_right" size={14} tintColor={c.secondary} />
                 </Pressable>
               </View>
             ))}
@@ -94,6 +121,9 @@ export default function ChooseRepo() {
         <Pressable onPress={() => open(installUrl())} style={[styles.button, { backgroundColor: c.tint }]}>
           <Text style={[styles.buttonText, { color: '#fff' }]}>2. Install YAFT on it</Text>
         </Pressable>
+        {Platform.OS === 'web' && <Pressable accessibilityRole="button" onPress={() => void load()}>
+          <Text style={[styles.link, { color: c.tint }]}>Refresh repositories</Text>
+        </Pressable>}
         <Pressable onPress={signOut} hitSlop={12}>
           <Text style={[styles.link, { color: c.red }]}>Sign out</Text>
         </Pressable>

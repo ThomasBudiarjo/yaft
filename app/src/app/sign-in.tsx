@@ -1,11 +1,12 @@
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { SymbolView } from 'expo-symbols';
+import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SymbolView } from '@/components/symbol';
 import { rounded, useColors } from '@/components/theme';
 import {
   AuthError,
@@ -20,8 +21,9 @@ import {
 export default function SignIn() {
   const c = useColors();
   const { signIn } = useAuth();
+  const params = useLocalSearchParams<{ error?: string }>();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState(params.error);
   const [device, setDevice] = useState<DeviceCode | null>(null);
   const abort = useRef<AbortController | null>(null);
 
@@ -31,7 +33,9 @@ export default function SignIn() {
     setError(undefined);
     setBusy(true);
     try {
-      signIn(await signInWithBrowser());
+      const session = await signInWithBrowser();
+      if (!session) return;
+      signIn(session);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       if (!(e instanceof AuthError && e.message === 'cancelled')) setError(e instanceof Error ? e.message : String(e));
@@ -59,6 +63,11 @@ export default function SignIn() {
   }
 
   async function openDevicePage(code: DeviceCode) {
+    if (Platform.OS === 'web') {
+      void Clipboard.setStringAsync(code.userCode).catch(() => {});
+      window.open(code.verificationUri, '_blank', 'noopener,noreferrer');
+      return;
+    }
     await Clipboard.setStringAsync(code.userCode);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await WebBrowser.openBrowserAsync(code.verificationUri);
@@ -101,6 +110,7 @@ export default function SignIn() {
         ) : (
           <>
             <Pressable
+              accessibilityRole="button"
               disabled={busy}
               onPress={browser}
               style={({ pressed }) => [styles.button, { backgroundColor: c.text }, (pressed || busy) && { opacity: 0.7 }]}>
@@ -108,12 +118,12 @@ export default function SignIn() {
                 <ActivityIndicator color={c.bg} />
               ) : (
                 <>
-                  <SymbolView name="person.crop.circle.fill" size={20} tintColor={c.bg} />
+                  <SymbolView name="person.crop.circle.fill" material="account_circle" size={20} tintColor={c.bg} />
                   <Text style={[styles.buttonText, { color: c.bg }]}>Sign in with GitHub</Text>
                 </>
               )}
             </Pressable>
-            <Pressable onPress={deviceFlow} hitSlop={12}>
+            <Pressable accessibilityRole="button" onPress={deviceFlow} hitSlop={12}>
               <Text style={[styles.link, { color: c.tint }]}>Can’t sign in? Try this…</Text>
             </Pressable>
           </>

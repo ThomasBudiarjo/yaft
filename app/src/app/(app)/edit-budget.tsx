@@ -1,7 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { alert } from '@/components/alert';
+import { Toolbar } from '@/components/toolbar';
 import { useColors } from '@/components/theme';
 import { Card, ColorPills, DestructiveButton, Field, SectionHeader, Separator } from '@/components/ui';
 import { useData } from '@/lib/data';
@@ -64,7 +66,7 @@ export default function EditBudget() {
           <DestructiveButton
             label="Delete budget"
             onPress={() =>
-              Alert.alert('Delete budget?', 'Transactions are kept.', [
+              alert('Delete budget?', 'Transactions are kept.', [
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Delete',
@@ -80,12 +82,12 @@ export default function EditBudget() {
         )}
       </ScrollView>
       <Stack.Screen options={{ title: existing ? 'Edit budget' : 'New budget' }} />
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Close" onPress={() => router.back()} />
-      </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
-      </Stack.Toolbar>
+      <Toolbar placement="left">
+        <Toolbar.Button icon="xmark" accessibilityLabel="Close" onPress={() => router.canGoBack() ? router.back() : router.replace('/budgets')} />
+      </Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
+      </Toolbar>
     </>
   );
 }

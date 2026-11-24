@@ -1,8 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { SymbolView } from 'expo-symbols';
-import { Alert, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { alert } from '@/components/alert';
+import { SymbolView } from '@/components/symbol';
+import { Toolbar } from '@/components/toolbar';
 import { CategoryIcon } from '@/components/category-icon';
 import { IconPicker } from '@/components/icon-picker';
 import { Segmented } from '@/components/native';
@@ -62,7 +64,7 @@ export default function EditCategory() {
           <Pressable onPress={() => setPicking(true)} style={({ pressed }) => [styles.row, pressed && { backgroundColor: c.fill }]}>
             <Text style={{ color: c.text, fontSize: 17, flex: 1 }}>Icon</Text>
             <CategoryIcon category={{ id: '', icon, emoji, color }} size={30} />
-            <SymbolView name="chevron.right" size={14} weight="semibold" tintColor={c.secondary} />
+            <SymbolView name="chevron.right" material="chevron_right" size={14} weight="semibold" tintColor={c.secondary} />
           </Pressable>
         </Card>
         <SectionHeader title="Color" />
@@ -73,7 +75,7 @@ export default function EditCategory() {
           <DestructiveButton
             label="Delete category"
             onPress={() =>
-              Alert.alert('Delete category?', 'Its transactions become uncategorized.', [
+              alert('Delete category?', 'Its transactions become uncategorized.', [
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Delete',
@@ -104,9 +106,9 @@ export default function EditCategory() {
         onClose={() => setPicking(false)}
       />
       <Stack.Screen options={{ title: existing ? 'Edit category' : 'New category' }} />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
-      </Stack.Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
+      </Toolbar>
     </>
   );
 }

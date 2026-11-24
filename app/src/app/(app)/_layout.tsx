@@ -3,6 +3,9 @@ import { useColors } from '@/components/theme';
 import { useAuth } from '@/lib/auth';
 import { DataProvider } from '@/lib/data';
 
+// A refreshed or bookmarked editor still has a screen to go back to.
+export const unstable_settings = { anchor: '(tabs)' };
+
 export default function AppLayout() {
   const { repo } = useAuth();
   const c = useColors();

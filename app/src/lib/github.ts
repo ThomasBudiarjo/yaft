@@ -10,6 +10,8 @@ export interface FileChange {
   text: string | null;
 }
 
+export const MANIFEST_PATH = 'yaft.json';
+
 export type RemoteDiff =
   | { kind: 'incremental'; upserts: { path: string; sha: string }[]; deletes: string[] }
   | { kind: 'full'; files: { path: string; sha: string }[] };

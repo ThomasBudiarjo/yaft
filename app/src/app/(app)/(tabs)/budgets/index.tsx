@@ -1,4 +1,5 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
+import { Toolbar } from '@/components/toolbar';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { BudgetCard } from '@/components/budget-card';
@@ -23,9 +24,9 @@ export default function Budgets() {
           </Card>
         </Pressable>
       </ScrollView>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="New budget" onPress={() => router.push('/edit-budget')} />
-      </Stack.Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="plus" accessibilityLabel="New budget" onPress={() => router.push('/edit-budget')} />
+      </Toolbar>
     </>
   );
 }

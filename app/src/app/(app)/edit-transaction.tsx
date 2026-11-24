@@ -1,8 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams, usePreventRemove } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { alert } from '@/components/alert';
+import { SymbolView } from '@/components/symbol';
+import { Toolbar } from '@/components/toolbar';
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Keypad, KEYPAD_HEIGHT } from '@/components/keypad';
@@ -83,7 +85,7 @@ export default function EditTransaction() {
   const dirty = !saved && JSON.stringify(form) !== JSON.stringify(initial);
 
   usePreventRemove(dirty, ({ repeat }) => {
-    Alert.alert('Discard changes?', 'Are you sure you want to discard your changes?', [
+    alert('Discard changes?', 'Are you sure you want to discard your changes?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Discard', style: 'destructive', onPress: repeat },
     ]);
@@ -139,7 +141,7 @@ export default function EditTransaction() {
 
   function remove() {
     if (!existing) return;
-    Alert.alert('Delete transaction?', undefined, [
+    alert('Delete transaction?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -178,6 +180,7 @@ export default function EditTransaction() {
 
           <Card style={[styles.amountCard, keypad && { borderColor: accent }]}>
             <Pressable
+              accessibilityRole="button"
               disabled={isTransfer}
               onPress={chooseCategory}
               accessibilityLabel={isTransfer ? 'Transfer' : `Category: ${category?.name ?? 'none'}. Change category`}
@@ -188,7 +191,7 @@ export default function EditTransaction() {
                 <CategoryIcon category={category} size={56} />
               ) : (
                 <View style={[styles.noCategory, { borderColor: c.separator }]}>
-                  <SymbolView name="square.grid.2x2" size={22} tintColor={c.secondary} />
+                  <SymbolView name="square.grid.2x2" material="grid_view" size={22} tintColor={c.secondary} />
                 </View>
               )}
               <Text numberOfLines={1} style={[styles.badgeLabel, { color: category || isTransfer ? c.text : c.tint }]}>
@@ -196,6 +199,7 @@ export default function EditTransaction() {
               </Text>
             </Pressable>
             <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Amount"
               onPress={() => {
                 Keyboard.dismiss();
@@ -218,7 +222,7 @@ export default function EditTransaction() {
               <SectionHeader title="From" />
               <Pills items={accountPills} value={form.accountId} onChange={(accountId) => set({ accountId })} />
               <View style={styles.arrow}>
-                <SymbolView name="arrow.down.circle.fill" size={28} tintColor={c.secondary} />
+                <SymbolView name="arrow.down.circle.fill" material="arrow_circle_down" size={28} tintColor={c.secondary} />
               </View>
               <SectionHeader title="To" />
               <Pills items={accountPills} value={form.toAccountId} onChange={(toAccountId) => set({ toAccountId })} />
@@ -270,7 +274,7 @@ export default function EditTransaction() {
                     style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: c.fill }]}>
                     <CategoryIcon category={cat} size={28} />
                     <Text style={{ color: c.text, fontSize: 16, flex: 1 }}>{s.title}</Text>
-                    <SymbolView name="arrow.up.left" size={14} tintColor={c.secondary} />
+                    <SymbolView name="arrow.up.left" material="north_west" size={14} tintColor={c.secondary} />
                   </Pressable>
                 </View>
               );
@@ -302,12 +306,12 @@ export default function EditTransaction() {
         )}
 
         <Stack.Screen options={{ title: existing ? 'Edit transaction' : 'New transaction' }} />
-        <Stack.Toolbar placement="left">
-          <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Close" onPress={() => router.back()} />
-        </Stack.Toolbar>
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
-        </Stack.Toolbar>
+        <Toolbar placement="left">
+          <Toolbar.Button icon="xmark" accessibilityLabel="Close" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} />
+        </Toolbar>
+        <Toolbar placement="right">
+          <Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
+        </Toolbar>
       </View>
     </LayoutAnimationConfig>
   );

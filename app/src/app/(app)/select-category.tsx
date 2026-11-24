@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from '@/components/symbol';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CategoryIcon } from '@/components/category-icon';
 import { useColors } from '@/components/theme';
@@ -40,7 +40,7 @@ export default function SelectCategory() {
         <Pressable onPress={() => router.push('/edit-category')} style={styles.tile}>
           <View style={[styles.ring, { borderColor: 'transparent' }]}>
             <View style={[styles.add, { backgroundColor: c.fill }]}>
-              <SymbolView name="plus" size={22} weight="semibold" tintColor={c.secondary} />
+              <SymbolView name="plus" material="add" size={22} weight="semibold" tintColor={c.secondary} />
             </View>
           </View>
           <Text style={[styles.label, { color: c.secondary }]}>New</Text>

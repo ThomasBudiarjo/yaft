@@ -1,8 +1,8 @@
 # YAFT
 
-Yet another financial tracker. Every account, category, budget, and transaction is a JSON file in a private GitHub repository that you own. The phone keeps a SQLite copy, commits your changes to the repository, and pulls only the files that changed.
+Yet another financial tracker. Every account, category, budget, and transaction is a JSON file in a private GitHub repository that you own. The app keeps a SQLite copy, commits your changes to the repository, and pulls only the files that changed.
 
-- `app/`: the Expo (SDK 58) app for iOS, which runs in Expo Go.
+- `app/`: the Expo (SDK 58) app for iOS and the installable web client at `https://yaft.cc/app/`.
 - `worker/`: a Cloudflare Worker at `https://yaft.cc`. It exchanges the app's OAuth code for a token, and serves an MCP server so agents can read and add transactions.
 
 ## How sync works
@@ -58,6 +58,7 @@ Then generate a client secret.
 ### 2. Worker
 
 ```sh
+(cd app && npm ci && npm run build:web)
 cd worker
 npm install
 npx wrangler secret put GITHUB_CLIENT_ID
@@ -66,6 +67,8 @@ npx wrangler deploy
 ```
 
 The worker is named `yaft` and serves `https://yaft.cc`: the landing page at `/`, `/callback`, `/token`, and `/refresh` for the app, and `/mcp` with `/authorize` and `/oauth/*` for agents. The first deploy creates the `OAUTH_KV` namespace, so the Cloudflare API token needs Workers KV Storage edit permission. Set `GITHUB_APP_SLUG` in `wrangler.jsonc` to the app's slug so the install button points at it.
+
+The Worker serves the web export at `/app/` without changing the landing page or agent routes. For local UI/PWA testing, build the web client as above, then run `npm run dev` in `worker/` and open `/app/` on the origin Wrangler prints. Real GitHub sign-in needs the configured HTTPS callback and exact web return URL.
 
 `ALLOWED_RETURN_URLS` in `wrangler.jsonc` lists where `/callback` may send the code. Add your Expo Go return URL during development (see below), for example `yaft://,exps://expo.example.com`.
 
@@ -83,6 +86,12 @@ npm run tunnel         # Metro behind cloudflared; scan the QR code with the iPh
 Expo Go on a physical iPhone opens the project only when Expo CLI (`npx expo login`) and Expo Go are signed in to the same Expo account. The project must also be linked to EAS (`extra.eas.projectId` in `app.json`) so the CLI can sign the manifest.
 
 After signing in, create a private repository, install the GitHub App on that repository only, and pick it in the app.
+
+### 4. Install the web app
+
+Open `https://yaft.cc/app/`. In Safari, use **Share → Add to Home Screen**; in Chromium, use **Install YAFT** from the address bar or browser menu. If GitHub opens outside the installed app, use **Can’t sign in? Try this…** to enter a device code instead.
+
+The first sign-in and sync need a connection. After that, the browser keeps a SQLite copy and queues edits until it can sync. Only one tab at a time can hold the local ledger. Online sync goes through the Worker, which keeps the GitHub tokens in a Durable Object for up to 30 days; the browser only gets an opaque Secure, HttpOnly, SameSite cookie. Sign-out needs a connection to delete the server session. It leaves the local ledger and pending edits intact. Use a trusted browser profile; clearing site data deletes any edits that have not synced.
 
 ## Checks
 

@@ -1,9 +1,10 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BudgetCard } from '@/components/budget-card';
 import { LineChart } from '@/components/charts';
 import { rounded, useColors } from '@/components/theme';
+import { Toolbar } from '@/components/toolbar';
 import { DayGroupView } from '@/components/tx-row';
 import { Card, Empty, Money } from '@/components/ui';
 import { useData } from '@/lib/data';
@@ -57,7 +58,7 @@ export default function Home() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={false} onRefresh={data.syncNow} />}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accounts}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={Platform.OS === 'web'} contentContainerStyle={styles.accounts}>
           <AccountCard
             name="All accounts"
             balance={total}
@@ -93,7 +94,7 @@ export default function Home() {
               onPress={() => setAccountId(a.id)}
             />
           ))}
-          <Pressable onPress={() => router.push('/edit-account')}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Add account" onPress={() => router.push('/edit-account')}>
             <Card style={[styles.accountCard, styles.addCard, { borderColor: c.separator }]}>
               <Text style={[styles.addText, { color: c.secondary }]}>＋ Account</Text>
             </Card>
@@ -128,8 +129,8 @@ export default function Home() {
         )}
       </ScrollView>
 
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
+      <Toolbar placement="left">
+        <Toolbar.Button
           icon={
             data.sync.status === 'error'
               ? 'exclamationmark.icloud'
@@ -140,10 +141,10 @@ export default function Home() {
           accessibilityLabel="Sync"
           onPress={() => router.push('/more')}
         />
-      </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add transaction" onPress={() => router.push('/edit-transaction')} />
-      </Stack.Toolbar>
+      </Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="plus" accessibilityLabel="Add transaction" onPress={() => router.push('/edit-transaction')} />
+      </Toolbar>
     </>
   );
 }
@@ -161,8 +162,8 @@ function AccountCard(props: {
 }) {
   const c = useColors();
   return (
-    <Pressable onPress={props.onPress} style={({ pressed }) => pressed && { transform: [{ scale: 0.97 }] }}>
-      <Card style={[styles.accountCard, { borderColor: props.selected ? props.color : 'transparent' }]}>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: props.selected }} onPress={props.onPress} style={({ pressed }) => pressed && { transform: [{ scale: 0.97 }] }}>
+      <Card style={[styles.accountCard, Platform.OS === 'web' && styles.webAccountCard, { borderColor: props.selected ? props.color : 'transparent' }]}>
         <View style={[styles.accountDot, { backgroundColor: props.color }]} />
         <Text numberOfLines={1} style={[styles.accountName, { color: c.text }]}>
           {props.name}
@@ -190,10 +191,11 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 16, paddingBottom: 48 },
   accounts: { gap: 12, paddingRight: 4 },
   accountCard: { width: 168, padding: 16, gap: 4, borderWidth: 2 },
+  webAccountCard: { width: 'auto', minWidth: 150, padding: 12 },
   accountDot: { width: 10, height: 10, borderRadius: 5, marginBottom: 6 },
   accountName: { fontSize: 15, fontWeight: '600' },
   accountBalance: { fontSize: 19 },
-  addCard: { flex: 1, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', width: 120 },
+  addCard: { flex: 1, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', width: 120, paddingHorizontal: 6 },
   addText: { fontSize: 15, fontWeight: '700', fontFamily: rounded },
   small: { fontSize: 13 },
   monthCard: { padding: 18, gap: 12 },

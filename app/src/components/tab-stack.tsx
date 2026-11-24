@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { useColors } from './theme';
+import { Platform } from 'react-native';
+import { rounded, useColors } from './theme';
 
 type ScreenOptions = NonNullable<ComponentProps<typeof Stack.Screen>['options']>;
 
@@ -21,6 +22,7 @@ export function TabStack({
         headerLargeTitleEnabled: true,
         headerLargeTitleShadowVisible: false,
         headerShadowVisible: false,
+        ...(Platform.OS === 'web' && { headerTitleStyle: { fontFamily: rounded, fontSize: 22, fontWeight: '800' } }),
         contentStyle: { backgroundColor: c.bg },
       }}>
       <Stack.Screen name="index" options={{ title, ...indexOptions }} />

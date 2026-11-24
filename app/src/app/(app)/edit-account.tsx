@@ -1,7 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+import { alert } from '@/components/alert';
+import { Toolbar } from '@/components/toolbar';
 import { Segmented } from '@/components/native';
 import { useColors } from '@/components/theme';
 import { Card, ColorPills, DestructiveButton, Field, SectionHeader, Separator } from '@/components/ui';
@@ -98,8 +100,8 @@ export default function EditAccount() {
             label="Delete account"
             onPress={() =>
               used
-                ? Alert.alert('Account in use', 'Move or delete its transactions first.')
-                : Alert.alert('Delete account?', undefined, [
+                ? alert('Account in use', 'Move or delete its transactions first.')
+                : alert('Delete account?', undefined, [
                     { text: 'Cancel', style: 'cancel' },
                     {
                       text: 'Delete',
@@ -115,9 +117,9 @@ export default function EditAccount() {
         )}
       </ScrollView>
       <Stack.Screen options={{ title: existing ? 'Edit account' : 'New account' }} />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
-      </Stack.Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="checkmark" variant="prominent" accessibilityLabel="Save" disabled={!valid} onPress={save} />
+      </Toolbar>
     </>
   );
 }

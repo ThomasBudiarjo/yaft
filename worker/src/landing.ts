@@ -61,10 +61,10 @@ footer{padding:40px 0 56px;color:var(--muted);font-size:15px;border-top:1px soli
 <header class="hero">
 <div>
 <h1>Your money,<br>in your own repo.</h1>
-<p class="lead">YAFT is a fast, native iPhone expense tracker. Every account, budget and transaction is a small JSON file in a private GitHub repository that you own. No YAFT account, and no server keeps your data.</p>
+<p class="lead">YAFT is an expense tracker for iPhone and web. Every account, budget and transaction is a small JSON file in a private GitHub repository that you own. No YAFT account, and no server keeps your data.</p>
 <div class="btns">
-<a class="btn primary" href="https://github.com/apps/{{APP_SLUG}}/installations/new">Install the GitHub App</a>
-<a class="btn ghost" href="#how">How it works</a>
+<a class="btn primary" href="/app/">Open web app</a>
+<a class="btn ghost" href="https://github.com/apps/{{APP_SLUG}}/installations/new">Install the GitHub App</a>
 </div>
 </div>
 <div class="phone" aria-hidden="true">

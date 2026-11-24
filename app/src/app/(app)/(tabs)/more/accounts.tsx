@@ -1,4 +1,5 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
+import { Toolbar } from '@/components/toolbar';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/components/theme';
 import { Card, Money, SectionHeader, Separator } from '@/components/ui';
@@ -45,9 +46,9 @@ export default function Accounts() {
           </Text>
         )}
       </ScrollView>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="New account" onPress={() => router.push('/edit-account')} />
-      </Stack.Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="plus" accessibilityLabel="New account" onPress={() => router.push('/edit-account')} />
+      </Toolbar>
     </>
   );
 }

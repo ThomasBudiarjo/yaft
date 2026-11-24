@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { fromLocalIso, toLocalIso } from '@/lib/model';
 import { useColors } from './theme';
 
 // Fallbacks for platforms without SwiftUI. iOS uses native.ios.tsx.
@@ -23,6 +24,8 @@ export function Segmented<T extends string>({
       {options.map((o) => (
         <Pressable
           key={o.value}
+          accessibilityRole="button"
+          accessibilityState={{ selected: o.value === value }}
           onPress={() => onChange(o.value)}
           style={[styles.segment, o.value === value && { backgroundColor: c.card }]}>
           <Text style={{ color: c.text, fontWeight: o.value === value ? '700' : '500' }}>{o.label}</Text>
@@ -34,12 +37,16 @@ export function Segmented<T extends string>({
 
 const FORMAT = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
-export function DateTimeField({ title, value }: { title: string; value: Date; onChange(date: Date): void }) {
+export function DateTimeField({ title, value, onChange }: { title: string; value: Date; onChange(date: Date): void }) {
   const c = useColors();
   return (
     <View style={styles.row}>
       <Text style={{ color: c.text, fontSize: 17 }}>{title}</Text>
-      <Text style={{ color: c.secondary, fontSize: 17 }}>{FORMAT.format(value)}</Text>
+      {Platform.OS === 'web' ? (
+        <input type="datetime-local" aria-label={title} value={toLocalIso(value).slice(0, 16)} onChange={(event) => {
+          if (event.target.value) onChange(fromLocalIso(event.target.value));
+        }} />
+      ) : <Text style={{ color: c.secondary, fontSize: 17 }}>{FORMAT.format(value)}</Text>}
     </View>
   );
 }

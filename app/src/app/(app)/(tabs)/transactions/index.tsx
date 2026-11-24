@@ -1,10 +1,12 @@
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MonthStrip } from '@/components/month-strip';
+import { Segmented } from '@/components/native';
 import { useColors } from '@/components/theme';
+import { Toolbar } from '@/components/toolbar';
 import { DayGroupView } from '@/components/tx-row';
-import { Card, Empty, Money } from '@/components/ui';
+import { Card, Empty, Field, Money } from '@/components/ui';
 import { useData } from '@/lib/data';
 import { balanceEffect, type TxType } from '@/lib/model';
 import { groupByDay, inMonth, monthLabel, thisMonth, totals } from '@/lib/stats';
@@ -45,6 +47,10 @@ export default function Transactions() {
         keyboardDismissMode="on-drag"
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={false} onRefresh={data.syncNow} />}>
+        {Platform.OS === 'web' && <>
+          <Card><Field accessibilityLabel="Search transactions" placeholder="Search transactions" value={query} onChangeText={setQuery} /></Card>
+          <Segmented options={[...TYPES]} value={type} onChange={setType} />
+        </>}
         {!q && <MonthStrip value={month} onChange={setMonth} />}
         <Card style={styles.summary}>
           <Summary label="Expense" amount={-sums.expense} currency={currency} color={c.red} />
@@ -64,7 +70,7 @@ export default function Transactions() {
         )}
       </ScrollView>
 
-      <Stack.Screen
+      {Platform.OS !== 'web' && <Stack.Screen
         options={{
           headerSearchBarOptions: {
             placeholder: 'Search transactions',
@@ -72,17 +78,17 @@ export default function Transactions() {
             onCancelButtonPress: () => setQuery(''),
           },
         }}
-      />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={type === 'all' ? 'line.3.horizontal.decrease.circle' : 'line.3.horizontal.decrease.circle.fill'}>
+      />}
+      <Toolbar placement="right">
+        {Platform.OS !== 'web' && <Toolbar.Menu icon={type === 'all' ? 'line.3.horizontal.decrease.circle' : 'line.3.horizontal.decrease.circle.fill'}>
           {TYPES.map((t) => (
-            <Stack.Toolbar.MenuAction key={t.value} icon={t.icon} isOn={type === t.value} onPress={() => setType(t.value)}>
+            <Toolbar.MenuAction key={t.value} icon={t.icon} isOn={type === t.value} onPress={() => setType(t.value)}>
               {t.label}
-            </Stack.Toolbar.MenuAction>
+            </Toolbar.MenuAction>
           ))}
-        </Stack.Toolbar.Menu>
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add transaction" onPress={() => router.push('/edit-transaction')} />
-      </Stack.Toolbar>
+        </Toolbar.Menu>}
+        <Toolbar.Button icon="plus" accessibilityLabel="Add transaction" onPress={() => router.push('/edit-transaction')} />
+      </Toolbar>
     </>
   );
 }

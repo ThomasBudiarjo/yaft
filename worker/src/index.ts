@@ -2,6 +2,9 @@ import { OAuthProvider, type OAuthHelpers } from "@cloudflare/workers-oauth-prov
 import { authorize, chooseRepo, exchangeCallback, finishSignIn, githubToken, READ, WRITE } from "./connect.ts";
 import { LANDING_HTML } from "./landing.ts";
 import { mcpHandler } from "./mcp.ts";
+import { webSession, WebSession } from "./web-session.ts";
+
+export { WebSession };
 
 export interface Env {
   GITHUB_CLIENT_ID: string;
@@ -10,6 +13,9 @@ export interface Env {
   ALLOWED_RETURN_URLS: string;
   /** github.com/apps/<slug>, for the install button on the home page. */
   GITHUB_APP_SLUG: string;
+  /** Expo web export, mounted under /app/. */
+  ASSETS: Pick<Fetcher, "fetch">;
+  WEB_SESSIONS: DurableObjectNamespace<WebSession>;
   /** Agent grants and tokens, managed by the OAuth provider. Tokens are hashed and props encrypted. */
   OAUTH_KV: KVNamespace;
   /** Set by the OAuth provider on every request. */
@@ -22,7 +28,14 @@ const ORIGIN = "https://yaft.cc";
 const site = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/app/api/")) return webSession(request, env, url);
     if (request.method === "GET" && url.pathname === "/") return landing(env);
+    if (request.method === "GET" || request.method === "HEAD") {
+      if (url.pathname === "/app") return Response.redirect(new URL(`/app/${url.search}`, url).href, 308);
+      if (url.pathname.startsWith("/app/") && (url.pathname === "/app/" || request.headers.get("Accept")?.includes("text/html"))) {
+        return env.ASSETS.fetch(new Request(new URL("/app/index.html", url), { method: request.method }));
+      }
+    }
     if (url.pathname === "/authorize" && (request.method === "GET" || request.method === "POST")) return authorize(request, env, url);
     if (request.method === "POST" && url.pathname === "/authorize/repo") return chooseRepo(request, env);
     if (request.method === "GET" && url.pathname === "/callback") {
@@ -125,6 +138,8 @@ export function isAllowedReturnUrl(returnUrl: string, allowList: string): boolea
     .map((p) => p.trim())
     .filter(Boolean)
     .some((prefix) => {
+      // Web returns to one exact route; native schemes still support deep links.
+      if (prefix.startsWith("https://")) return returnUrl === prefix;
       if (!returnUrl.startsWith(prefix)) return false;
       if (prefix.endsWith("/") || returnUrl.length === prefix.length) return true;
       return "/?#".includes(returnUrl[prefix.length]);

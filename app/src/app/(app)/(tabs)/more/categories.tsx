@@ -1,4 +1,5 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
+import { Toolbar } from '@/components/toolbar';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/components/theme';
 import { SectionHeader } from '@/components/ui';
@@ -16,9 +17,9 @@ export default function Categories() {
         <SectionHeader title="Income" />
         <Grid items={categories.filter((c) => c.type === 'income')} />
       </ScrollView>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="New category" onPress={() => router.push('/edit-category')} />
-      </Stack.Toolbar>
+      <Toolbar placement="right">
+        <Toolbar.Button icon="plus" accessibilityLabel="New category" onPress={() => router.push('/edit-category')} />
+      </Toolbar>
     </>
   );
 }

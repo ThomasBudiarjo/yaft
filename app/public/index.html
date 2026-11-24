@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#EEF2F7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="/app/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/app/icon-192.png" />
+    <title>%WEB_TITLE%</title>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+        margin: 0;
+        background: #e4e9f0;
+        color-scheme: light dark;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+        max-width: 900px;
+        margin-inline: auto;
+        background: #eef2f7;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #111113; }
+        #root { background: #000; }
+      }
+      input[type="datetime-local"], select {
+        padding: 6px;
+        border: 1px solid #8e8e9380;
+        border-radius: 8px;
+        font: inherit;
+        max-width: 100%;
+      }
+      :where(button, a, [role="button"], input, select):focus-visible {
+        outline: 2px solid #2f6fed;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript> You need to enable JavaScript to run this app. </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+    <script src="/app/register-sw.js" defer></script>
+  </body>
+</html>

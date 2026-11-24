@@ -34,7 +34,7 @@ export function useColors(): Colors {
 }
 
 /** SF Pro Rounded on iOS, for headings and amounts. */
-export const rounded = Platform.select({ ios: 'ui-rounded', default: undefined });
+export const rounded = Platform.select({ ios: 'ui-rounded', web: 'ui-rounded, system-ui', default: undefined });
 
 export function typeColor(type: TxType, c: Colors): string {
   return type === 'expense' ? c.red : type === 'income' ? c.green : c.secondary;

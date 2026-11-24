@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView } from './symbol';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CategoryIcon } from './category-icon';
@@ -41,11 +41,11 @@ export function IconPicker({
         <View style={styles.header}>
           <Text style={[styles.title, { color: c.text }]}>Select icon</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
-            <SymbolView name="xmark.circle.fill" size={28} tintColor={c.secondary} type="hierarchical" />
+            <SymbolView name="xmark.circle.fill" material="cancel" size={28} tintColor={c.secondary} type="hierarchical" />
           </Pressable>
         </View>
         <View style={[styles.search, { backgroundColor: c.fill }]}>
-          <SymbolView name="magnifyingglass" size={16} tintColor={c.secondary} />
+          <SymbolView name="magnifyingglass" material="search" size={16} tintColor={c.secondary} />
           <TextInput
             value={query}
             onChangeText={setQuery}

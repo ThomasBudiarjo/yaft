@@ -5,18 +5,21 @@
   "name": "yaft",
   "account_id": "991d2edd07348de19465a4b5c06b73dc",
   "main": "src/index.ts",
+  "assets": { "directory": "../app/web-build", "binding": "ASSETS", "html_handling": "none" },
   "compatibility_date": "2026-11-01",
   // Agents may identify themselves with a Client ID Metadata Document URL, which the OAuth
   // provider fetches; this keeps that fetch off private and internal addresses.
   "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
   "routes": [{ "pattern": "yaft.cc", "custom_domain": true }],
+  "durable_objects": { "bindings": [{ "name": "WEB_SESSIONS", "class_name": "WebSession" }] },
+  "migrations": [{ "tag": "web-sessions-v1", "new_sqlite_classes": ["WebSession"] }],
   // Agent grants and tokens. Tokens are stored as hashes and each grant's GitHub token is
   // encrypted with a key only that grant's tokens unwrap. Created on first deploy.
   "kv_namespaces": [{ "binding": "OAUTH_KV" }],
   "vars": {
     // The app's own scheme, plus Expo Go through the named dev tunnel (app/scripts/tunnel.sh).
-    "ALLOWED_RETURN_URLS": "yaft://,exps://expo.yaft.cc,exp://expo.yaft.cc",
+    "ALLOWED_RETURN_URLS": "yaft://,exps://expo.yaft.cc,exp://expo.yaft.cc,https://yaft.cc/app/auth",
     "GITHUB_APP_SLUG": "yaft-sync",
     "GITHUB_CLIENT_ID": "Iv23liZdVmX6qlbzLOQL"
   }
